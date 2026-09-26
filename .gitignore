@@ -5,3 +5,5 @@ dist
 /public/data/*.tyc
 test-results
 playwright-report
+.claude
+/public/data/*.tycz

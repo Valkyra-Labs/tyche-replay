@@ -15,7 +15,7 @@ function params() {
   const q = new URLSearchParams(location.search);
   return {
     symbol: q.get("symbol") ?? "AAPL",
-    data: q.get("data") ?? `${import.meta.env.BASE_URL}data/20260924_deepplus.tyc`,
+    data: q.get("data") ?? `${import.meta.env.BASE_URL}data/20260924_AAPL_deepplus.tycz`,
     at: Number(q.get("at") ?? 0),
   };
 }

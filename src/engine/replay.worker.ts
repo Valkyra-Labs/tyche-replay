@@ -13,7 +13,15 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
     if (msg.kind === "load") {
       const t0 = performance.now();
       await init();
-      const bytes = new Uint8Array(await (await fetch(msg.url)).arrayBuffer());
+      const res = await fetch(msg.url);
+      if (!res.ok) throw new Error(`cannot load ${msg.url}: ${res.status}`);
+      let bytes = new Uint8Array(await res.arrayBuffer());
+      // Captures ship gzipped (.tycz). Decide by the gzip magic, not by the
+      // name or headers: some servers inflate on the way, some do not.
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        const inflated = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        bytes = new Uint8Array(await new Response(inflated).arrayBuffer());
+      }
       replay?.free();
       replay = new TycheReplay(bytes, msg.symbol);
       post({
