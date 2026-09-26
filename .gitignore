@@ -1,10 +1,10 @@
-node_modules
-dist
-.DS_Store
 *.log
-/public/data/*.tyc
-test-results
-playwright-report
+.DS_Store
 .claude
-/public/data/*.tycz
 /docs/inside/
+/public/data/*.tyc
+/public/data/*.tycz
+dist
+node_modules
+playwright-report
+test-results

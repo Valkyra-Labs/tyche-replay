@@ -9,17 +9,24 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run --exclude e2e/**",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans": "5.3.0",
+    "@valkyra-labs/stoa-react": "link:../stoa-system/packages/react",
     "@valkyra-labs/stoa-tokens": "link:../stoa-system/packages/tokens",
+    "@xstate/react": "6.1.0",
     "react": "19.3.0",
+    "react-aria-components": "1.21.1",
     "react-dom": "19.3.0",
-    "tyche-market": "link:../tyche-market/pkg"
+    "tyche-market": "link:../tyche-market/pkg",
+    "xstate": "5.33.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
