@@ -4,6 +4,10 @@ import { I18nProvider } from "@valkyra-labs/stoa-react";
 import "@valkyra-labs/stoa-tokens/tokens.css";
 import "./styles.css";
 import { App } from "./App";
+import { applyTheme, pickTheme, storedTheme } from "./ui/prefs";
+
+// The theme before the first paint, so a dark page does not flash light.
+applyTheme(pickTheme(location.search, storedTheme()));
 
 // Tyche is an English app: without a provider, Stoa and React Aria take
 // the browser's locale and would write prices as 334,55 on a Russian one.

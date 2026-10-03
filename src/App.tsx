@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
 import {
   Button,
@@ -19,6 +19,7 @@ import type { FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/pr
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
+import { applyTheme, pickTheme, saveTheme, storedTheme, useSystemTheme, type Theme } from "./ui/prefs";
 import { clampTime, clock, parseAt, stepOrigin } from "./ui/time";
 
 const DEPTH = 12;
@@ -52,6 +53,13 @@ function params() {
 export function App() {
   const [{ symbol, data, at }] = useState(params);
   const [state, send] = useMachine(transport);
+  // None until the viewer picks one: the page follows the system, and the
+  // switch shows the system's scheme.
+  const [theme, setTheme] = useState<Theme | null>(() => pickTheme(location.search, storedTheme()));
+  const systemTheme = useSystemTheme();
+  // Stoa's canvases watch data-theme on <html> and redraw in the new
+  // colours, also while paused.
+  useLayoutEffect(() => applyTheme(theme), [theme]);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [stage, setStage] = useState<LoadStage>("downloading");
   // Each retry loads the capture again in a new worker.
@@ -266,6 +274,19 @@ export function App() {
         <span className="muted">
           Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.
         </span>
+        <ChoiceGroup<Theme>
+          size="small"
+          label="Theme"
+          value={theme ?? systemTheme}
+          onChange={(next) => {
+            saveTheme(next);
+            setTheme(next);
+          }}
+          choices={[
+            { id: "light", label: "Light" },
+            { id: "dark", label: "Dark" },
+          ]}
+        />
       </header>
       {(loading || failed) && (
         <main className="load">

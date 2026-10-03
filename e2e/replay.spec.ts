@@ -336,6 +336,80 @@ test("a start time that is not a number, or before the day, opens at the first m
   }
 });
 
+// Share of a canvas painted in the surface colour that the page's tokens
+// give now: near 1 minus the ink once the canvas has redrawn in the
+// current theme, near 0 while it still shows another theme's surface.
+const surfaceShare = (page: Page, selector: string) =>
+  page.locator(selector).evaluate((c: HTMLCanvasElement) => {
+    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    probe.fillStyle = getComputedStyle(c).getPropertyValue("--stoa-color-surface").trim();
+    probe.fillRect(0, 0, 1, 1);
+    const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+    const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    let same = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] === r && d[i + 1] === g && d[i + 2] === b) same++;
+    return same / (d.length / 4);
+  });
+
+test.describe("the theme", () => {
+  test.use({ colorScheme: "dark" });
+
+  test("follows the system until one is chosen", async ({ page }) => {
+    await open(page);
+    expect(await page.locator("html").getAttribute("data-theme")).toBeNull();
+    const group = page.getByRole("radiogroup", { name: "Theme" });
+    await expect(group.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+    // The surface is dark, and the heatmap is drawn on it.
+    const surface = await page.locator(".stoa-heatmap__canvas").evaluate((c) => {
+      const probe = document.createElement("canvas").getContext("2d")!;
+      probe.fillStyle = getComputedStyle(c).getPropertyValue("--stoa-color-surface").trim();
+      probe.fillRect(0, 0, 1, 1);
+      return Array.from(probe.getImageData(0, 0, 1, 1).data.slice(0, 3));
+    });
+    for (const channel of surface) expect(channel).toBeLessThan(60);
+    await expect.poll(() => surfaceShare(page, ".stoa-heatmap__canvas")).toBeGreaterThan(0.5);
+  });
+
+  test("switches, redraws the canvases while paused, and is kept across a reload", async ({ page }) => {
+    await open(page);
+    const ladder = ".stoa-ladder__canvas";
+    const heatmap = ".stoa-heatmap__canvas";
+    await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
+    const colours = () =>
+      page.locator(ladder).evaluate((c: HTMLCanvasElement) => Array.from(c.getContext("2d")!.getImageData(1, 1, 1, 1).data).join());
+    const darkLadder = await colours();
+    await page.getByRole("radio", { name: "Light" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(new URL(page.url()).searchParams.get("theme")).toBe("light");
+    expect(await page.evaluate(() => localStorage.getItem("tyche-replay:theme"))).toBe("light");
+    // Paused: nothing but the theme asks the canvases to draw again.
+    await expect(page.locator("main.grid")).toHaveAttribute("data-state", "paused");
+    await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
+    await expect.poll(() => surfaceShare(page, ladder)).toBeGreaterThan(0.5);
+    expect(await colours()).not.toBe(darkLadder);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page.getByRole("radio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+    // Remembered by the browser too: a link without ?theme= opens light.
+    await open(page);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
+    // And back to dark.
+    await page.getByRole("radio", { name: "Dark" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
+    expect(await colours()).toBe(darkLadder);
+  });
+
+  test("?theme= wins over the remembered choice", async ({ page }) => {
+    await open(page);
+    await page.getByRole("radio", { name: "Light" }).click();
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=dark`);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  });
+});
+
 // The Playback panel's place on the page, and the height of the trades.
 const playbackTop = (page: Page) =>
   page.getByRole("region", { name: "Playback" }).evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
