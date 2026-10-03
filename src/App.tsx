@@ -56,9 +56,11 @@ export function App() {
   const [stage, setStage] = useState<LoadStage>("downloading");
   // Each retry loads the capture again in a new worker.
   const [attempt, setAttempt] = useState(0);
-  // Until the first heatmap arrives, and whenever the book has no
-  // midpoint, the heatmap shows Stoa's empty state.
-  const [heatmapEmpty, setHeatmapEmpty] = useState(true);
+  // The prices of the heatmap's top and bottom rows, for its text
+  // alternative. Until the first heatmap arrives, and whenever the book
+  // has no midpoint, there are none and the heatmap shows Stoa's empty
+  // state.
+  const [heatRange, setHeatRange] = useState<{ top: number; bottom: number } | null>(null);
   // Focus was on the load status (after Retry) when the load finished: the
   // status goes away, so the Play button takes focus rather than the page.
   const [focusPlay, setFocusPlay] = useState(false);
@@ -97,7 +99,7 @@ export function App() {
     trades.current = [];
     setTape([]);
     setStage("downloading");
-    setHeatmapEmpty(true);
+    setHeatRange(null);
     const w = new Worker(new URL("./engine/replay.worker.ts", import.meta.url), { type: "module" });
     worker.current = w;
     const fail = (message: string) => {
@@ -130,9 +132,11 @@ export function App() {
         if (m.heatmap) {
           heatmap.current?.draw(m.heatmap);
           stats.current.heat.push(m.heatmap.ms);
-          setHeatmapEmpty(false);
+          const { top, tick, rows } = m.heatmap;
+          const bottom = top - tick * (rows - 1);
+          setHeatRange((r) => (r?.top === top && r.bottom === bottom ? r : { top, bottom }));
         } else if (m.heatmap === null) {
-          setHeatmapEmpty(true);
+          setHeatRange(null);
         }
         if (import.meta.env.DEV) {
           const shown = m.heatmap === undefined ? (window.__tycheViews ?? { heatmapTime: -1, heatmap: null }) : { heatmapTime: m.time, heatmap: m.heatmap };
@@ -297,14 +301,18 @@ export function App() {
           <Panel title="Liquidity, last 10 minutes" className="heat">
             <Heatmap
               ref={heatmap}
-              data={heatmapEmpty ? null : undefined}
+              data={heatRange ? undefined : null}
               // As tall as the ladder beside it: DEPTH rows a side at the
               // density's row height. The version redraws it at a new
               // height while paused.
               height={DEPTH * 2 * rowHeight}
               tokensVersion={rowHeight}
               label="Displayed liquidity over the last 10 minutes"
-              description="Bids below the midpoint, asks above; darker cells hold more shares. Time runs left to right."
+              description={
+                heatRange
+                  ? `Prices from ${n(heatRange.top, 2)} at the top to ${n(heatRange.bottom, 2)} at the bottom, a cent a row, around the midpoint now. Time runs left to right, 2.5 seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`
+                  : undefined
+              }
             />
           </Panel>
           <Panel title="Trades" className="trades">

@@ -172,6 +172,13 @@ test("the heatmap draws the cells the engine sent, the newest column the book no
     if (v > 0) expect(price).toBeLessThanOrEqual(check.bestBid!);
     else expect(price).toBeGreaterThanOrEqual(check.bestAsk!);
   }
+  // The text alternative names the prices of the top and bottom rows,
+  // which the canvas labels show.
+  const { top, bottom } = await page.evaluate(() => {
+    const h = window.__tycheViews!.heatmap!;
+    return { top: h.top.toFixed(2), bottom: (h.top - h.tick * (h.rows - 1)).toFixed(2) };
+  });
+  await expect(page.locator(".stoa-heatmap figcaption")).toContainText(`Prices from ${top} at the top to ${bottom} at the bottom`);
 });
 
 test("the book is described in text for screen readers", async ({ page }) => {
@@ -258,7 +265,7 @@ test("before the first trade, the views show their empty states", async ({ page 
 
 test("seeking back to the start empties the trades and the heatmap again", async ({ page }) => {
   await open(page);
-  await expect(page.locator(".stoa-heatmap figcaption")).toHaveText(/Bids below the midpoint/);
+  await expect(page.locator(".stoa-heatmap figcaption")).toHaveText(/^Prices from \d+\.\d\d at the top/);
   await expect(page.locator(".trades tbody tr").first()).not.toHaveText("No trades yet.");
   const slider = page.getByRole("slider", { name: "Time" });
   await slider.focus();
