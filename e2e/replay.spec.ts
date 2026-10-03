@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 // 10:00 ET is this many ns after AAPL's first message of the day.
-const TEN_AM = 10_335_389_000_000;
+const TEN_AM = 10_335_395_000_000;
 const CAPTURE = "/data/20260924_AAPL_deepplus.tycz";
 
 async function open(page: Page, at: number | string = TEN_AM) {
@@ -49,6 +49,21 @@ test("the space bar toggles playback and the slider seeks from the keyboard", as
   await slider.press("ArrowRight");
   await expect.poll(() => clockSeconds(page)).toBe(before + 2);
   await expect(slider).toHaveAttribute("aria-valuetext", /^\d\d:\d\d:\d\d\.\d{3}$/);
+});
+
+test("the slider shows the clock as it is, and a key moves it by a second", async ({ page }) => {
+  await open(page);
+  const output = page.locator(".stoa-slider__output");
+  const slider = page.getByRole("slider", { name: "Time" });
+  await expect(output).toHaveText("10:00:00.000");
+  await expect(slider).toHaveAttribute("aria-valuetext", "10:00:00.000");
+  await slider.focus();
+  await slider.press("ArrowRight");
+  await expect(output).toHaveText("10:00:01.000");
+  await expect(slider).toHaveAttribute("aria-valuetext", "10:00:01.000");
+  await slider.press("ArrowLeft");
+  await slider.press("ArrowLeft");
+  await expect(output).toHaveText("09:59:59.000");
 });
 
 // Share of the heatmap canvas painted in something other than the

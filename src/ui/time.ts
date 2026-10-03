@@ -20,6 +20,16 @@ export function parseAt(raw: string | null): number {
   return Number.isFinite(at) ? Math.max(0, at) : 0;
 }
 
+/** The minimum for a time slider at `ns` whose steps are `step` ns long.
+ * The slider counts its steps from its minimum and holds its value to
+ * them; from here they pass through `ns` itself, so the slider shows the
+ * clock as it is and a key moves it exactly one step. It is at or less
+ * than one step before the first message. `ns` and `step` are whole. */
+export function stepOrigin(ns: number, step: number): number {
+  const past = ns % step;
+  return past === 0 ? 0 : past - step;
+}
+
 /** `ns` kept within the day: from the first message to the last. */
 export function clampTime(ns: number, duration: number): number {
   return Math.min(Math.max(ns, 0), duration);

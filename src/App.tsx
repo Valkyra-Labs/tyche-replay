@@ -18,14 +18,16 @@ import type { FromWorker, HeatmapRequest, LoadStage, ToWorker } from "./engine/p
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
-import { clampTime, clock, parseAt } from "./ui/time";
+import { clampTime, clock, parseAt, stepOrigin } from "./ui/time";
 
 const DEPTH = 12;
 const TAPE_WINDOW_NS = 60e9;
 const HEATMAP: HeatmapRequest = { window: 600e9, columns: 240, rows: 80, tick: 0.01 };
 const HEATMAP_EVERY_MS = 250;
 const SCRUB_STEP_NS = 1e9;
-const snap = (v: number) => Math.round(v / SCRUB_STEP_NS) * SCRUB_STEP_NS;
+// The slider shows the clock itself, to the whole nanosecond (stepOrigin
+// needs whole numbers); while playing the clock moves in fractions of one.
+const wholeNs = Math.round;
 
 type Loaded = { duration: number; startEpochMs: number; messages: number; loadMs: number; bytes: number };
 
@@ -55,7 +57,7 @@ export function App() {
   const [scrub, setScrub] = useState(0);
   // The slider is controlled by the clock ten times a second; it answers
   // a new value with onChange, and that echo must not count as a seek
-  // (it snapped the clock back to the last whole second, every 100 ms).
+  // (it pulled the clock back to the value shown, every 100 ms).
   const shownScrub = useRef(0);
   const [hud, setHud] = useState({ fps: 0, frameP95: 0, seekP95: 0, heatmapP95: 0, msgsPerSec: 0, orders: 0 });
 
@@ -106,7 +108,7 @@ export function App() {
         setStage(m.stage);
       } else if (m.kind === "loaded") {
         t.current = clampTime(at, m.duration);
-        shownScrub.current = snap(t.current);
+        shownScrub.current = wholeNs(t.current);
         setScrub(shownScrub.current);
         setFocusPlay(status.current?.contains(document.activeElement) ?? false);
         setLoaded(m);
@@ -187,7 +189,7 @@ export function App() {
       if (now - slowAt > 100) {
         slowAt = now;
         setTape(trades.current.map((tr) => ({ ...tr, time: clock(loaded.startEpochMs, Number(tr.time)) })));
-        shownScrub.current = snap(t.current);
+        shownScrub.current = wholeNs(t.current);
         setScrub(shownScrub.current);
       }
       if (now - hudAt > 500) {
@@ -304,15 +306,19 @@ export function App() {
               />
               <TimeSlider
                 label="Time"
-                min={0}
+                // Steps of a second from the clock, not from the first
+                // message: the label is the clock, and a key moves it by
+                // exactly a second. The minimum is up to a second before
+                // the first message; a seek there goes to the first message.
+                min={stepOrigin(scrub, SCRUB_STEP_NS)}
                 max={loaded.duration}
                 step={SCRUB_STEP_NS}
                 value={scrub}
                 onChange={(v) => {
                   if (v === shownScrub.current) return;
-                  t.current = v;
-                  shownScrub.current = v;
-                  setScrub(v);
+                  t.current = clampTime(v, loaded.duration);
+                  shownScrub.current = wholeNs(t.current);
+                  setScrub(shownScrub.current);
                   send({ type: "SEEK" });
                 }}
                 format={(v) => clock(loaded.startEpochMs, v)}
