@@ -295,29 +295,8 @@ export function App() {
       )}
       {loaded && !failed && (
         <main className="grid" data-state={String(state.value)} data-speed={speed}>
-          <Panel title="Book" className="book">
-            <Ladder ref={ladder} depth={DEPTH} label={`Order book for ${symbol}, ${DEPTH} levels per side`} />
-          </Panel>
-          <Panel title="Liquidity, last 10 minutes" className="heat">
-            <Heatmap
-              ref={heatmap}
-              data={heatRange ? undefined : null}
-              // As tall as the ladder beside it: DEPTH rows a side at the
-              // density's row height. The version redraws it at a new
-              // height while paused.
-              height={DEPTH * 2 * rowHeight}
-              tokensVersion={rowHeight}
-              label="Displayed liquidity over the last 10 minutes"
-              description={
-                heatRange
-                  ? `Prices from ${n(heatRange.top, 2)} at the top to ${n(heatRange.bottom, 2)} at the bottom, a cent a row, around the midpoint now. Time runs left to right, 2.5 seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`
-                  : undefined
-              }
-            />
-          </Panel>
-          <Panel title="Trades" className="trades">
-            <TradeTable caption={`Recent trades in ${symbol}`} trades={tape} />
-          </Panel>
+          {/* The controls come first, under the header, so that nothing above
+              them changes height while the views below fill up. */}
           <Panel title="Playback" className="transport">
             <div className="transport-row">
               <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
@@ -363,6 +342,29 @@ export function App() {
                 { label: "day", value: `${n(loaded.messages)} messages, ${n(loaded.bytes / 1e6, 1)} MB, loaded in ${n(loaded.loadMs)} ms` },
               ]}
             />
+          </Panel>
+          <Panel title="Book" className="book">
+            <Ladder ref={ladder} depth={DEPTH} label={`Order book for ${symbol}, ${DEPTH} levels per side`} />
+          </Panel>
+          <Panel title="Liquidity, last 10 minutes" className="heat">
+            <Heatmap
+              ref={heatmap}
+              data={heatRange ? undefined : null}
+              // As tall as the ladder beside it: DEPTH rows a side at the
+              // density's row height. The version redraws it at a new
+              // height while paused.
+              height={DEPTH * 2 * rowHeight}
+              tokensVersion={rowHeight}
+              label="Displayed liquidity over the last 10 minutes"
+              description={
+                heatRange
+                  ? `Prices from ${n(heatRange.top, 2)} at the top to ${n(heatRange.bottom, 2)} at the bottom, a cent a row, around the midpoint now. Time runs left to right, 2.5 seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`
+                  : undefined
+              }
+            />
+          </Panel>
+          <Panel title="Trades" className="trades">
+            <TradeTable caption={`Recent trades in ${symbol}`} trades={tape} />
           </Panel>
         </main>
       )}

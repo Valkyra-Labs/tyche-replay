@@ -336,6 +336,34 @@ test("a start time that is not a number, or before the day, opens at the first m
   }
 });
 
+// The Playback panel's place on the page, and the height of the trades.
+const playbackTop = (page: Page) =>
+  page.getByRole("region", { name: "Playback" }).evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+const tradesHeight = (page: Page) => page.locator(".trades table").evaluate((el) => el.getBoundingClientRect().height);
+
+for (const [name, viewport] of [
+  ["side by side", { width: 1440, height: 900 }],
+  ["in one column", { width: 412, height: 823 }],
+] as const) {
+  test(`the playback controls stay where they are while the views fill up (${name})`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    // From the first trade of the day the trades list grows from nothing.
+    await open(page, 8530e9);
+    const before = await playbackTop(page);
+    const tradesBefore = await tradesHeight(page);
+    await page.getByRole("radio", { name: "60x" }).click();
+    await page.getByRole("button", { name: "Play" }).click();
+    await expect.poll(() => page.locator(".trades tbody tr").count(), { timeout: 15_000 }).toBeGreaterThan(10);
+    expect(await tradesHeight(page)).toBeGreaterThan(tradesBefore);
+    expect(await playbackTop(page)).toBe(before);
+    // Above the views: the header, then Playback and Performance.
+    const views = await page.locator(".book").evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    const hud = await page.getByRole("region", { name: "Performance" }).evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    expect(before).toBeLessThan(hud);
+    expect(hud).toBeLessThan(views);
+  });
+}
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 412, height: 823 } });
 

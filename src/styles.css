@@ -23,13 +23,13 @@ body { margin: 0; }
 .grid {
   display: grid; gap: var(--stoa-space-3); padding: var(--stoa-space-3);
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(260px, 340px);
-  grid-template-areas: "book heat trades" "transport transport transport" "hud hud hud";
+  grid-template-areas: "transport transport transport" "hud hud hud" "book heat trades";
 }
 .book { grid-area: book; } .heat { grid-area: heat; } .trades { grid-area: trades; }
 .transport { grid-area: transport; } .hud { grid-area: hud; }
 .transport-row { display: flex; flex-wrap: wrap; gap: var(--stoa-space-3); align-items: center; }
 @media (max-width: 1000px) {
-  .grid { grid-template-columns: 1fr; grid-template-areas: "book" "heat" "trades" "transport" "hud"; }
+  .grid { grid-template-columns: 1fr; grid-template-areas: "transport" "hud" "book" "heat" "trades"; }
   /* On a phone, 11px text (Stoa's 2xs: the notes and the counters) is
      too small to read; 12px is the floor. */
   .muted, .stoa-statbar { font-size: var(--stoa-font-size-xs); }
