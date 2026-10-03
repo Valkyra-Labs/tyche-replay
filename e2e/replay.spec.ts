@@ -447,7 +447,7 @@ test.describe("the language", () => {
     await expect.poll(() => heatmapInk(page)).toBeGreaterThan(0.01);
     const ladderEn = await drawn(".stoa-ladder__canvas");
     const heatmapEn = await drawn(".stoa-heatmap__canvas");
-    await page.getByRole("radiogroup", { name: "Language" }).getByRole("radio", { name: "عربي" }).click();
+    await page.getByRole("radiogroup", { name: "Language" }).getByRole("radio", { name: "AR" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
     expect(new URL(page.url()).searchParams.get("lang")).toBe("ar");
@@ -481,7 +481,7 @@ test.describe("the language", () => {
     await expect(page.locator(".stoa-heatmap figcaption")).toContainText("الأسعار من");
     const arabic = await pageText(page);
     const english = arabic.filter((t) => t.english).map((t) => t.text);
-    expect(english).toEqual(["EN"]);
+    expect(english).toEqual(["EN", "AR"]);
     const left = arabic.filter((t) => !t.english).flatMap((t) => latinIn(t.text).map((w) => `${t.where}: ${w} in "${t.text}"`));
     expect(left).toEqual([]);
 

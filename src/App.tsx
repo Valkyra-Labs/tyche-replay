@@ -328,10 +328,11 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           label={text.language}
           value={lang}
           onChange={onLang}
-          // Each language by its own name, in its own script.
+          // The same EN / AR pair as the themis-steps demo; each code is
+          // named in English, the language it is written in.
           choices={[
             { id: "en", label: <span lang="en">EN</span> },
-            { id: "ar", label: <span lang="ar">عربي</span> },
+            { id: "ar", label: <span lang="en">AR</span> },
           ]}
         />
       </header>
