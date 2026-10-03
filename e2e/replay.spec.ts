@@ -8,7 +8,7 @@ import AxeBuilder from "@axe-core/playwright";
 const TEN_AM = 10_335_389_000_000;
 const CAPTURE = "/data/20260924_AAPL_deepplus.tycz";
 
-async function open(page: Page, at = TEN_AM) {
+async function open(page: Page, at: number | string = TEN_AM) {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${at}`);
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
 }
@@ -191,6 +191,16 @@ test("at the end of the day, Play starts again from the beginning", async ({ pag
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "playing");
   await expect.poll(() => clockSeconds(page)).toBeLessThan(end - 3600);
+});
+
+test("a start time that is not a number, or before the day, opens at the first message", async ({ page }) => {
+  await open(page, 0);
+  const first = await page.locator(".stoa-slider__output").textContent();
+  for (const at of ["ten", "Infinity", -5e9]) {
+    await open(page, at);
+    await expect(page.locator(".stoa-slider__output")).toHaveText(first!);
+    await expect(page.locator(".stoa-ladder figcaption")).toHaveText("The book is empty.");
+  }
 });
 
 test.describe("on a phone", () => {

@@ -18,7 +18,7 @@ import type { FromWorker, HeatmapRequest, LoadStage, ToWorker } from "./engine/p
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
-import { clock } from "./ui/time";
+import { clampTime, clock, parseAt } from "./ui/time";
 
 const DEPTH = 12;
 const TAPE_WINDOW_NS = 60e9;
@@ -34,7 +34,7 @@ function params() {
   return {
     symbol: q.get("symbol") ?? "AAPL",
     data: q.get("data") ?? `${import.meta.env.BASE_URL}data/20260924_AAPL_deepplus.tycz`,
-    at: Number(q.get("at") ?? 0),
+    at: parseAt(q.get("at")),
   };
 }
 
@@ -105,7 +105,7 @@ export function App() {
       if (m.kind === "progress") {
         setStage(m.stage);
       } else if (m.kind === "loaded") {
-        t.current = Math.min(at, m.duration);
+        t.current = clampTime(at, m.duration);
         shownScrub.current = snap(t.current);
         setScrub(shownScrub.current);
         setFocusPlay(status.current?.contains(document.activeElement) ?? false);
