@@ -192,3 +192,24 @@ test("at the end of the day, Play starts again from the beginning", async ({ pag
   await expect(grid).toHaveAttribute("data-state", "playing");
   await expect.poll(() => clockSeconds(page)).toBeLessThan(end - 3600);
 });
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 412, height: 823 } });
+
+  test("no text is smaller than 12px", async ({ page }) => {
+    await open(page);
+    await expect(page.locator(".stoa-statbar")).toContainText("frames/s");
+    const small = await page.evaluate(() => {
+      const found: string[] = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const el = node.parentElement;
+        if (!el || !node.textContent?.trim() || !el.checkVisibility()) continue;
+        const size = parseFloat(getComputedStyle(el).fontSize);
+        if (size < 12) found.push(`${el.className || el.tagName}: ${size}px "${node.textContent.trim().slice(0, 30)}"`);
+      }
+      return found;
+    });
+    expect(small).toEqual([]);
+  });
+});
