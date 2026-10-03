@@ -136,6 +136,26 @@ test("a worker that cannot start is reported, and Retry starts a new one", async
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
 });
 
+test("an engine failure after the load is reported as a stopped replay, and Retry loads again", async ({ page }) => {
+  // A stand-in engine: it loads, then fails on the first seek.
+  const failing = `self.onmessage = (e) => self.postMessage(e.data.kind === "load"
+    ? { kind: "loaded", duration: 60e9, startEpochMs: 0, messages: 0, loadMs: 0, bytes: 0 }
+    : { kind: "error", message: "seek failed" });`;
+  let broken = true;
+  await page.route("**/replay.worker.ts*", (route) =>
+    broken ? route.fulfill({ status: 200, contentType: "text/javascript", body: failing }) : route.continue(),
+  );
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("The AAPL replay stopped.");
+  await expect(alert).toContainText("seek failed");
+  await expect(alert).not.toContainText("Could not load");
+  broken = false;
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+  await expect(alert).toHaveCount(0);
+});
+
 test("before the first trade, the views show their empty states", async ({ page }) => {
   // The first message of the day: no orders and no trades yet.
   await open(page, 0);

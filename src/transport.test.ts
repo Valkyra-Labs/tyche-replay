@@ -29,7 +29,7 @@ describe("transport", () => {
     a.send({ type: "FAILED", message: "404" });
     a.send({ type: "PLAY" });
     expect(a.getSnapshot().value).toBe("failed");
-    expect(a.getSnapshot().context.error).toBe("404");
+    expect(a.getSnapshot().context.error).toEqual({ during: "load", message: "404" });
   });
 
   it("fails from any state, and a retry loads again with the speed kept", () => {
@@ -39,13 +39,43 @@ describe("transport", () => {
     a.send({ type: "PLAY" });
     a.send({ type: "FAILED", message: "worker stopped" });
     expect(a.getSnapshot().value).toBe("failed");
-    expect(a.getSnapshot().context.error).toBe("worker stopped");
+    expect(a.getSnapshot().context.error).toEqual({ during: "playback", message: "worker stopped" });
     a.send({ type: "RETRY" });
     expect(a.getSnapshot().value).toBe("loading");
     expect(a.getSnapshot().context.error).toBeNull();
     expect(a.getSnapshot().context.speed).toBe(60);
     a.send({ type: "LOADED" });
     expect(a.getSnapshot().value).toBe("paused");
+  });
+
+  it("a failure while paused or at the end is a playback failure", () => {
+    for (const end of [false, true]) {
+      const a = createActor(transport).start();
+      a.send({ type: "LOADED" });
+      if (end) {
+        a.send({ type: "PLAY" });
+        a.send({ type: "ENDED" });
+      }
+      a.send({ type: "FAILED", message: "seek failed" });
+      expect(a.getSnapshot().context.error).toEqual({ during: "playback", message: "seek failed" });
+    }
+  });
+
+  it("a second report keeps the stage of the failure", () => {
+    const a = createActor(transport).start();
+    a.send({ type: "FAILED", message: "cannot load: 404" });
+    a.send({ type: "FAILED", message: "The replay engine stopped." });
+    expect(a.getSnapshot().value).toBe("failed");
+    expect(a.getSnapshot().context.error).toEqual({ during: "load", message: "The replay engine stopped." });
+  });
+
+  it("a failure after a retry is a load failure again until the load ends", () => {
+    const a = createActor(transport).start();
+    a.send({ type: "LOADED" });
+    a.send({ type: "FAILED", message: "worker stopped" });
+    a.send({ type: "RETRY" });
+    a.send({ type: "FAILED", message: "cannot load: 500" });
+    expect(a.getSnapshot().context.error).toEqual({ during: "load", message: "cannot load: 500" });
   });
 
   it("retries only after a failure", () => {

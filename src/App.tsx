@@ -264,8 +264,12 @@ export function App() {
             </div>
             {failed && (
               <div role="alert" className="load-failure">
-                <StatusBadge tone="negative">Could not load the {symbol} capture.</StatusBadge>
-                <p className="muted">{state.context.error}</p>
+                <StatusBadge tone="negative">
+                  {state.context.error?.during === "playback"
+                    ? `The ${symbol} replay stopped.`
+                    : `Could not load the ${symbol} capture.`}
+                </StatusBadge>
+                <p className="muted">{state.context.error?.message}</p>
               </div>
             )}
             {failed && <Button onPress={retry}>Retry</Button>}
