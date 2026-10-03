@@ -124,6 +124,26 @@ describe("the liquidity heatmap", () => {
     }
   });
 
+  it("spans the whole window from the first message on, empty before it", () => {
+    for (const time of [0, 1, 120 * SECOND, HEATMAP.window - 1]) {
+      const { from, to } = heatmapFrame(time, 336.115, HEATMAP);
+      expect(to - from).toBe(HEATMAP.window);
+    }
+    // The engine takes a window that starts before the first message: two
+    // minutes in, the first 192 columns (8 minutes) end before it and are
+    // empty; the others hold the book of their slice, as everywhere.
+    const { from, to, top } = heatmapFrame(120 * SECOND, 336.115, HEATMAP);
+    const cells = replay.heatmap(from, to, HEATMAP.columns, top, HEATMAP.tick, HEATMAP.rows);
+    expect(cells.length).toBe(HEATMAP.columns * HEATMAP.rows);
+    const slice = HEATMAP.window / HEATMAP.columns;
+    expect(from + slice * 192).toBe(0);
+    for (let c = 0; c < HEATMAP.columns; c++) {
+      const end = from + slice * (c + 1);
+      const want = end < 0 ? new Array<number>(HEATMAP.rows).fill(0) : expectedColumn(bookAt(end), top);
+      expect(column(cells, c), `column ${c}`).toEqual(want);
+    }
+  });
+
   it("leaves the newest column empty when the spread is wider than the rows", () => {
     // At 10:00:00 the best bid is 334.55 and the best ask 337.68: every
     // level of the book is outside the 80 cents around the midpoint.
