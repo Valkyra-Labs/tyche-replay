@@ -54,7 +54,8 @@ export function App() {
   const t = useRef(0);
   const pending = useRef(false);
   const lastAsked = useRef(-1);
-  const lastHeatmap = useRef(0);
+  const lastHeatmap = useRef(-Infinity);
+  const heatmapFor = useRef(-1);
   const trades = useRef<Trade[]>([]);
   const playing = state.matches("playing");
   const speed = state.context.speed;
@@ -121,12 +122,18 @@ export function App() {
         t.current = Math.min(loaded.duration, t.current + dt * 1e6 * live.current.speed);
         if (t.current >= loaded.duration) send({ type: "ENDED" });
       }
-      if (!pending.current && worker.current && t.current !== lastAsked.current) {
+      // The heatmap is throttled, so the request that reaches the final
+      // time of a seek or a pause may go without one; it catches up on a
+      // later frame even when the clock stands still.
+      const wantHeatmap = now - lastHeatmap.current > HEATMAP_EVERY_MS && heatmapFor.current !== t.current;
+      if (!pending.current && worker.current && (t.current !== lastAsked.current || wantHeatmap)) {
         const back = t.current < lastAsked.current;
         if (back) trades.current = [];
         const from = back || lastAsked.current < 0 ? Math.max(0, t.current - TAPE_WINDOW_NS) : lastAsked.current;
-        const wantHeatmap = now - lastHeatmap.current > HEATMAP_EVERY_MS;
-        if (wantHeatmap) lastHeatmap.current = now;
+        if (wantHeatmap) {
+          lastHeatmap.current = now;
+          heatmapFor.current = t.current;
+        }
         pending.current = true;
         worker.current.postMessage({
           kind: "seek",

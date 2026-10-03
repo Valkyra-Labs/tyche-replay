@@ -45,6 +45,23 @@ test("the space bar toggles playback and the slider seeks from the keyboard", as
   await expect(slider).toHaveAttribute("aria-valuetext", /^\d\d:\d\d:\d\d\.\d{3}$/);
 });
 
+// Share of the heatmap canvas painted in something other than the
+// surface colour: cells, labels and text.
+const heatmapInk = (page: Page) =>
+  page.locator(".stoa-heatmap__canvas").evaluate((c: HTMLCanvasElement) => {
+    const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+    let ink = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] !== d[0] || d[i + 1] !== d[1] || d[i + 2] !== d[2]) ink++;
+    return ink / (d.length / 4);
+  });
+
+test("the heatmap is drawn while paused, right after the load", async ({ page }) => {
+  await open(page);
+  // At 10:00 the cells cover about 3% of the canvas; an empty-state
+  // message alone covers well under 1%.
+  await expect.poll(() => heatmapInk(page)).toBeGreaterThan(0.01);
+});
+
 test("the book is described in text for screen readers", async ({ page }) => {
   await open(page);
   await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/);
