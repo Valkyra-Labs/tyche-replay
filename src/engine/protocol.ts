@@ -8,9 +8,23 @@ export type ToWorker =
 
 export type HeatmapResult = { cells: Float32Array; columns: number; rows: number; top: number; tick: number; ms: number };
 
+/** Why the replay failed, for the interface to say in its language: the
+ * server's answer to the download, the worker stopping or sending what
+ * cannot be read, or the engine's own message (in English, shown as a
+ * detail). */
+export type FailureReason =
+  | { kind: "http"; status: number }
+  | { kind: "stopped"; detail?: string }
+  | { kind: "unreadable" }
+  | { kind: "engine"; detail: string };
+
+/** Where a load is: fetching the capture, then inflating and indexing it. */
+export type LoadStage = "downloading" | "decoding";
+
 export type FromWorker =
+  | { kind: "progress"; stage: LoadStage }
   | { kind: "loaded"; duration: number; startEpochMs: number; messages: number; loadMs: number; bytes: number }
-  | { kind: "error"; message: string }
+  | { kind: "error"; reason: FailureReason }
   | {
       kind: "state";
       time: number;
@@ -18,7 +32,9 @@ export type FromWorker =
       levels: Float64Array;
       /** [time, price, size, side] per execution since tradesFrom */
       trades: Float64Array;
-      heatmap?: HeatmapResult;
+      /** Absent when not asked for; null when asked for but there is no
+       * midpoint to centre it on (one side of the book is empty). */
+      heatmap?: HeatmapResult | null;
       applied: number;
       orders: number;
       seekMs: number;
