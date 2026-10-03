@@ -57,3 +57,15 @@ test("no serious or critical axe violations", async ({ page }) => {
   const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(serious.map((v) => `${v.id}: ${v.nodes.length} node(s)`)).toEqual([]);
 });
+
+test.describe("on a Russian browser", () => {
+  test.use({ locale: "ru-RU" });
+
+  test("prices and sizes keep the English format", async ({ page }) => {
+    await open(page);
+    await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask \d+\.\d\d for [\d,]+/);
+    const prices = page.locator(".trades tbody td.stoa-num");
+    await expect(prices.first()).toHaveText(/^[\d,]+(\.\d\d)?$/);
+    for (const text of await prices.allTextContents()) expect(text).toMatch(/^[\d,]+(\.\d\d)?$/);
+  });
+});
