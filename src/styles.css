@@ -1,6 +1,13 @@
 @import "@fontsource/ibm-plex-sans/400.css";
 @import "@fontsource/ibm-plex-sans/600.css";
 @import "@fontsource/ibm-plex-mono/400.css";
+/* Arabic: the sans faces in the weights the page uses (regular, and
+   Stoa's medium for panel titles and badges), and Noto Sans Arabic, which
+   Stoa's mono stack takes for Arabic-Indic digits in the tables and on
+   the canvases. */
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/noto-sans-arabic/400.css";
 @import "@valkyra-labs/stoa-react/styles.css";
 
 :root {
@@ -14,6 +21,8 @@ body { margin: 0; }
 .bar { display: flex; flex-wrap: wrap; gap: var(--stoa-space-3); align-items: baseline; padding: var(--stoa-space-2) var(--stoa-space-4); border-block-end: 1px solid var(--stoa-color-border); background: var(--stoa-color-surface); }
 .bar h1 { font-size: var(--stoa-font-size-md); margin: 0; }
 .spacer { flex: 1; }
+/* The terms link reads as part of the note, underlined. */
+.bar a { color: inherit; }
 .muted { color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-2xs); }
 .load { padding: var(--stoa-space-3); }
 .load .stoa-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--stoa-space-2); }

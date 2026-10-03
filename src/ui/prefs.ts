@@ -1,8 +1,9 @@
-// The theme. It lives in the URL, so a reload or a shared link keeps
-// it, and this browser remembers it too.
+// The theme and the language. Both live in the URL, so a reload or a
+// shared link keeps them; the theme is also remembered by this browser.
 // Without a choice the theme follows the system (no data-theme on <html>,
 // and Stoa's tokens.css takes prefers-color-scheme).
 import { useEffect, useState } from "react";
+import type { Lang } from "../i18n";
 
 export type Theme = "light" | "dark";
 
@@ -16,6 +17,11 @@ export function pickTheme(search: string, stored: string | null): Theme | null {
   const asked = new URLSearchParams(search).get("theme");
   if (isTheme(asked)) return asked;
   return isTheme(stored) ? stored : null;
+}
+
+/** The language asked for in `?lang=`; English otherwise. */
+export function pickLang(search: string): Lang {
+  return new URLSearchParams(search).get("lang") === "ar" ? "ar" : "en";
 }
 
 /** The theme this browser chose last. Storage can be blocked or absent
@@ -33,8 +39,13 @@ export function applyTheme(theme: Theme | null) {
   else delete document.documentElement.dataset.theme;
 }
 
+export function applyLang(lang: Lang) {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+}
+
 /** Put `value` in the URL's `name` parameter. replaceState: a switch of
- * theme is not a step to go back through. */
+ * theme or language is not a step to go back through. */
 function setParam(name: string, value: string) {
   const url = new URL(location.href);
   url.searchParams.set(name, value);
@@ -48,6 +59,10 @@ export function saveTheme(theme: Theme) {
   } catch {
     // Not remembered by this browser; the URL still has it.
   }
+}
+
+export function saveLang(lang: Lang) {
+  setParam("lang", lang);
 }
 
 /** The system's colour scheme, followed as it changes. */

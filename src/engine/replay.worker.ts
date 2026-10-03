@@ -6,12 +6,19 @@ import { heatmapFrame } from "./heatmap";
 import type { FromWorker, HeatmapResult, ToWorker } from "./protocol";
 
 let replay: TycheReplay | null = null;
+
+/** The server answered the download with an error status. */
+class HttpStatus extends Error {
+  constructor(readonly status: number) {
+    super(`HTTP ${status}`);
+  }
+}
 const post = (m: FromWorker, transfer: Transferable[] = []) => self.postMessage(m, { transfer });
 
 async function load(url: string): Promise<Uint8Array> {
   post({ kind: "progress", stage: "downloading" });
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`cannot load ${url}: ${res.status}`);
+  if (!res.ok) throw new HttpStatus(res.status);
   const bytes = new Uint8Array(await res.arrayBuffer());
   post({ kind: "progress", stage: "decoding" });
   // Captures ship gzipped (.tycz). Decide by the gzip magic, not by the
@@ -62,6 +69,12 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       post({ kind: "state", time: msg.time, levels, trades, heatmap, applied, orders: replay.orderCount(), seekMs }, transfer);
     }
   } catch (err) {
-    post({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    post({
+      kind: "error",
+      reason:
+        err instanceof HttpStatus
+          ? { kind: "http", status: err.status }
+          : { kind: "engine", detail: err instanceof Error ? err.message : String(err) },
+    });
   }
 };

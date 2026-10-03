@@ -214,7 +214,7 @@ test("a failed load says why, and Retry loads it", async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Could not load the AAPL capture.");
-  await expect(alert).toContainText(`cannot load ${CAPTURE}: 404`);
+  await expect(alert).toContainText("The server answered with status 404.");
   expect(await seriousViolations(page)).toEqual([]);
   missing = false;
   await page.getByRole("button", { name: "Retry" }).click();
@@ -238,7 +238,7 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
   // A stand-in engine: it loads, then fails on the first seek.
   const failing = `self.onmessage = (e) => self.postMessage(e.data.kind === "load"
     ? { kind: "loaded", duration: 60e9, startEpochMs: 0, messages: 0, loadMs: 0, bytes: 0 }
-    : { kind: "error", message: "seek failed" });`;
+    : { kind: "error", reason: { kind: "engine", detail: "seek failed" } });`;
   let broken = true;
   await page.route("**/replay.worker.ts*", (route) =>
     broken ? route.fulfill({ status: 200, contentType: "text/javascript", body: failing }) : route.continue(),
@@ -409,6 +409,110 @@ test.describe("the theme", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 });
+
+/** Every piece of text a person can see or hear: visible text nodes (with
+ * the element they sit in, by tag and class), and the names, values and
+ * captions given to assistive technology. Text marked lang="en" in an
+ * Arabic page (the EN option, an engine message) is listed apart. */
+const pageText = (page: Page) =>
+  page.evaluate(() => {
+    const texts: { where: string; text: string; english: boolean }[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      const text = node.textContent?.trim();
+      if (!el || !text || !el.checkVisibility()) continue;
+      const path: string[] = [];
+      for (let e: Element | null = el; e && e !== document.body; e = e.parentElement) path.unshift(`${e.tagName.toLowerCase()}.${e.classList[0] ?? ""}`);
+      texts.push({ where: path.join(">"), text, english: el.closest("[lang]")?.getAttribute("lang") === "en" });
+    }
+    for (const el of document.querySelectorAll("[aria-label], [aria-valuetext]"))
+      for (const attr of ["aria-label", "aria-valuetext"]) {
+        const text = el.getAttribute(attr);
+        if (text) texts.push({ where: `${el.tagName.toLowerCase()}[${attr}]`, text, english: false });
+      }
+    texts.push({ where: "title", text: document.title, english: false });
+    return texts;
+  });
+
+/** Latin letters and digits left in Arabic text, but for the names AAPL and IEX. */
+const latinIn = (text: string) => text.replace(/AAPL|IEX/g, "").match(/[A-Za-z0-9]+/g) ?? [];
+
+test.describe("the language", () => {
+  test("switches to Arabic: right to left, Arabic words and Arabic-Indic digits, kept across a reload", async ({ page }) => {
+    await open(page);
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+    const drawn = (selector: string) => page.locator(selector).evaluate((c: HTMLCanvasElement) => c.toDataURL());
+    await expect.poll(() => heatmapInk(page)).toBeGreaterThan(0.01);
+    const ladderEn = await drawn(".stoa-ladder__canvas");
+    const heatmapEn = await drawn(".stoa-heatmap__canvas");
+    await page.getByRole("radiogroup", { name: "Language" }).getByRole("radio", { name: "عربي" }).click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "ar");
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    expect(new URL(page.url()).searchParams.get("lang")).toBe("ar");
+    await expect(page.getByRole("heading", { name: "التشغيل" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
+    // Paused, the canvases draw their words and digits again in Arabic.
+    await expect(page.locator("main.grid")).toHaveAttribute("data-state", "paused");
+    await expect.poll(() => drawn(".stoa-ladder__canvas")).not.toBe(ladderEn);
+    await expect.poll(() => drawn(".stoa-heatmap__canvas")).not.toBe(heatmapEn);
+    // The tape and the clock in Arabic-Indic digits.
+    const time = page.locator(".trades tbody tr").first().locator("td").first();
+    await expect(time).toHaveText(/^[٠-٩]{2}:[٠-٩]{2}:[٠-٩]{2}٫[٠-٩]{3}$/);
+    await expect(page.locator(".stoa-slider__output")).toHaveText("١٠:٠٠:٠٠٫٠٠٠");
+    await expect(page.getByRole("slider", { name: "الوقت" })).toHaveAttribute("aria-valuetext", "١٠:٠٠:٠٠٫٠٠٠");
+    await expect(page.locator(".trades tbody td.stoa-num").first()).toHaveText(/^[٠-٩٬]+(٫[٠-٩]{2})?$/);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    // And back.
+    await page.getByRole("radio", { name: "EN" }).click();
+    await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+    await expect(page.getByRole("heading", { name: "Playback" })).toBeVisible();
+    await expect(page.locator(".stoa-slider__output")).toHaveText("10:00:00.000");
+  });
+
+  test("leaves no English in Arabic, and Arabic has no text English lacks", async ({ page }) => {
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=ar`);
+    await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
+    // The ladder's text follows a while after the first draw.
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء");
+    await expect(page.locator(".stoa-heatmap figcaption")).toContainText("الأسعار من");
+    const arabic = await pageText(page);
+    const english = arabic.filter((t) => t.english).map((t) => t.text);
+    expect(english).toEqual(["EN"]);
+    const left = arabic.filter((t) => !t.english).flatMap((t) => latinIn(t.text).map((w) => `${t.where}: ${w} in "${t.text}"`));
+    expect(left).toEqual([]);
+
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=en`);
+    await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid");
+    const en = await pageText(page);
+    expect(en.map((t) => t.where).sort()).toEqual(arabic.map((t) => t.where).sort());
+  });
+
+  test("says why a load failed in Arabic", async ({ page }) => {
+    await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+    const alert = page.getByRole("alert");
+    await expect(alert).toContainText("تعذّر تحميل تسجيل AAPL.");
+    await expect(alert).toContainText("ردّ الخادم برمز الحالة ٤٠٤.");
+    await expect(page.getByRole("button", { name: "أعد المحاولة" })).toBeVisible();
+    const left = (await pageText(page)).filter((t) => !t.english).flatMap((t) => latinIn(t.text));
+    expect(left).toEqual([]);
+    expect(await seriousViolations(page)).toEqual([]);
+  });
+});
+
+for (const lang of ["en", "ar"] as const)
+  for (const theme of ["light", "dark"] as const)
+    test(`no serious or critical axe violations: ${lang}, ${theme}`, async ({ page }) => {
+      await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=${lang}&theme=${theme}`);
+      await expect(page.getByRole("button", { name: lang === "en" ? "Play" : "تشغيل" })).toBeVisible();
+      await page.waitForTimeout(1000);
+      expect(await seriousViolations(page)).toEqual([]);
+    });
 
 // The Playback panel's place on the page, and the height of the trades.
 const playbackTop = (page: Page) =>

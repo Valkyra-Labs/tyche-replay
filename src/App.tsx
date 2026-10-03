@@ -6,16 +6,19 @@ import {
   Heatmap,
   Ladder,
   Panel,
+  signalTokensChanged,
   StatBar,
   StatusBadge,
   TimeSlider,
   TradeTable,
+  useStoaFormat,
   type HeatmapHandle,
   type LadderHandle,
   type Trade,
 } from "@valkyra-labs/stoa-react";
 import { HEATMAP } from "./engine/heatmap";
-import type { FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/protocol";
+import type { FailureReason, FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/protocol";
+import { strings, type Lang } from "./i18n";
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
@@ -50,8 +53,14 @@ function params() {
   };
 }
 
-export function App() {
+const IEX_TERMS = "https://www.iex.io/legal/hist-data-terms";
+
+/** The replay. Rendered inside an I18nProvider set to the language's
+ * locale, which Stoa's words and digits follow. */
+export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void }) {
   const [{ symbol, data, at }] = useState(params);
+  const text = strings[lang];
+  const format = useStoaFormat();
   const [state, send] = useMachine(transport);
   // None until the viewer picks one: the page follows the system, and the
   // switch shows the system's scheme.
@@ -82,6 +91,20 @@ export function App() {
 
   const root = useRef<HTMLDivElement>(null);
   const rowHeight = useRowHeight(root);
+  // The canvases draw words and digits in the locale, and only when asked:
+  // a new language, or a font that arrives after a draw (the Arabic faces
+  // load on first use), redraws them, also while paused.
+  useEffect(() => {
+    document.title = text.title;
+    if (root.current) signalTokensChanged(root.current);
+  }, [text]);
+  useEffect(() => {
+    const redraw = () => {
+      if (root.current) signalTokensChanged(root.current);
+    };
+    document.fonts.addEventListener("loadingdone", redraw);
+    return () => document.fonts.removeEventListener("loadingdone", redraw);
+  }, []);
   const status = useRef<HTMLDivElement>(null);
   const ladder = useRef<LadderHandle>(null);
   const heatmap = useRef<HeatmapHandle>(null);
@@ -110,17 +133,17 @@ export function App() {
     setHeatRange(null);
     const w = new Worker(new URL("./engine/replay.worker.ts", import.meta.url), { type: "module" });
     worker.current = w;
-    const fail = (message: string) => {
+    const fail = (reason: FailureReason) => {
       setLoaded(null);
-      send({ type: "FAILED", message });
+      send({ type: "FAILED", reason });
     };
     // A worker that cannot start (its module or the WebAssembly fails to
     // load) or crashes says so here, not with an error message.
     w.onerror = (e) => {
       e.preventDefault();
-      fail(e.message || "The replay engine stopped.");
+      fail({ kind: "stopped", detail: e.message || undefined });
     };
-    w.onmessageerror = () => fail("The replay engine sent a message that could not be read.");
+    w.onmessageerror = () => fail({ kind: "unreadable" });
     w.onmessage = (e: MessageEvent<FromWorker>) => {
       const m = e.data;
       if (m.kind === "progress") {
@@ -133,7 +156,7 @@ export function App() {
         setLoaded(m);
         send({ type: "LOADED" });
       } else if (m.kind === "error") {
-        fail(m.message);
+        fail(m.reason);
       } else {
         pending.current = false;
         ladder.current?.draw(m.levels);
@@ -263,54 +286,88 @@ export function App() {
     send({ type: "RETRY" });
   };
 
-  const n = (v: number, digits = 0) => v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits });
+  const n = (v: number, digits = 0) => (digits === 0 ? format.integer(v) : format.decimal(v, digits));
+  const reason = state.context.error?.reason;
+  // The engine's own words (and the browser's) are English: a detail,
+  // marked as such for the page's language.
+  const detail = (message: string) => (
+    <>
+      {text.details}{" "}
+      <span lang="en" dir="ltr">
+        {message}
+      </span>
+    </>
+  );
 
   return (
     <div className="app" ref={root}>
       <header className="bar">
-        <h1>Tyche Replay</h1>
-        <span className="muted">{symbol} on IEX</span>
+        <h1>{text.title}</h1>
+        <span className="muted">{text.onIex(symbol)}</span>
         <span className="spacer" />
         <span className="muted">
-          Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.
+          {text.attribution}
+          <a href={IEX_TERMS}>{text.terms}</a>
+          {text.attributionEnd}
         </span>
         <ChoiceGroup<Theme>
           size="small"
-          label="Theme"
+          label={text.theme}
           value={theme ?? systemTheme}
           onChange={(next) => {
             saveTheme(next);
             setTheme(next);
           }}
           choices={[
-            { id: "light", label: "Light" },
-            { id: "dark", label: "Dark" },
+            { id: "light", label: text.light },
+            { id: "dark", label: text.dark },
+          ]}
+        />
+        <ChoiceGroup<Lang>
+          size="small"
+          label={text.language}
+          value={lang}
+          onChange={onLang}
+          // Each language by its own name, in its own script.
+          choices={[
+            { id: "en", label: <span lang="en">EN</span> },
+            { id: "ar", label: <span lang="ar">عربي</span> },
           ]}
         />
       </header>
       {(loading || failed) && (
         <main className="load">
-          <Panel title={`${symbol} capture`}>
+          <Panel title={text.capture(symbol)}>
             {/* One polite status for the whole load: a message per stage,
                 not per byte. It stays mounted across a retry. */}
             <div role="status" ref={status} tabIndex={-1} className="load-status">
               {loading && (
                 <StatusBadge tone="neutral">
-                  {stage === "downloading" ? `Downloading the ${symbol} capture…` : `Decoding the ${symbol} capture…`}
+                  {stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol)}
                 </StatusBadge>
               )}
             </div>
             {failed && (
               <div role="alert" className="load-failure">
                 <StatusBadge tone="negative">
-                  {state.context.error?.during === "playback"
-                    ? `The ${symbol} replay stopped.`
-                    : `Could not load the ${symbol} capture.`}
+                  {state.context.error?.during === "playback" ? text.replayStopped(symbol) : text.loadFailed(symbol)}
                 </StatusBadge>
-                <p className="muted">{state.context.error?.message}</p>
+                {reason && (
+                  <p className="muted">
+                    {reason.kind === "http" && text.httpFailed(format.integer(reason.status))}
+                    {reason.kind === "stopped" && (
+                      <>
+                        {text.engineStopped}
+                        {reason.detail && <> {detail(reason.detail)}</>}
+                      </>
+                    )}
+                    {reason.kind === "unreadable" && text.unreadable}
+                    {reason.kind === "engine" && detail(reason.detail)}
+                  </p>
+                )}
               </div>
             )}
-            {failed && <Button onPress={retry}>Retry</Button>}
+            {failed && <Button onPress={retry}>{text.retry}</Button>}
           </Panel>
         </main>
       )}
@@ -318,19 +375,19 @@ export function App() {
         <main className="grid" data-state={String(state.value)} data-speed={speed}>
           {/* The controls come first, under the header, so that nothing above
               them changes height while the views below fill up. */}
-          <Panel title="Playback" className="transport">
+          <Panel title={text.playback} className="transport">
             <div className="transport-row">
               <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
-                {playing ? "Pause" : "Play"}
+                {playing ? text.pause : text.play}
               </Button>
               <ChoiceGroup<Speed>
-                label="Speed"
+                label={text.speed}
                 value={speed}
                 onChange={(s) => send({ type: "SPEED", speed: s })}
-                choices={SPEEDS.map((s) => ({ id: s, label: `${s}x` }))}
+                choices={SPEEDS.map((s) => ({ id: s, label: text.speedChoice(format.integer(s)) }))}
               />
               <TimeSlider
-                label="Time"
+                label={text.time}
                 // Steps of a second from the clock, not from the first
                 // message: the label is the clock, and a key moves it by
                 // exactly a second. The minimum is up to a second before
@@ -346,28 +403,28 @@ export function App() {
                   setScrub(shownScrub.current);
                   send({ type: "SEEK" });
                 }}
-                format={(v) => clock(loaded.startEpochMs, v)}
+                format={(v) => format.digits(clock(loaded.startEpochMs, v))}
               />
             </div>
           </Panel>
-          <Panel title="Performance" className="hud">
+          <Panel title={text.performance} className="hud">
             <StatBar
-              label="Performance counters"
+              label={text.counters}
               items={[
-                { label: "frames/s", value: n(hud.fps) },
-                { label: "frame p95", value: `${n(hud.frameP95, 1)} ms` },
-                { label: "book p95", value: `${n(hud.seekP95, 2)} ms` },
-                { label: "heatmap p95", value: `${n(hud.heatmapP95, 2)} ms` },
-                { label: "messages/s", value: n(hud.msgsPerSec) },
-                { label: "orders", value: n(hud.orders) },
-                { label: "day", value: `${n(loaded.messages)} messages, ${n(loaded.bytes / 1e6, 1)} MB, loaded in ${n(loaded.loadMs)} ms` },
+                { label: text.fps, value: n(hud.fps) },
+                { label: text.frameP95, value: text.ms(n(hud.frameP95, 1)) },
+                { label: text.bookP95, value: text.ms(n(hud.seekP95, 2)) },
+                { label: text.heatmapP95, value: text.ms(n(hud.heatmapP95, 2)) },
+                { label: text.messagesPerSecond, value: n(hud.msgsPerSec) },
+                { label: text.orders, value: n(hud.orders) },
+                { label: text.day, value: text.dayValue(n(loaded.messages), n(loaded.bytes / 1e6, 1), n(loaded.loadMs)) },
               ]}
             />
           </Panel>
-          <Panel title="Book" className="book">
-            <Ladder ref={ladder} depth={DEPTH} label={`Order book for ${symbol}, ${DEPTH} levels per side`} />
+          <Panel title={text.book} className="book">
+            <Ladder ref={ladder} depth={DEPTH} label={text.bookLabel(symbol, n(DEPTH))} />
           </Panel>
-          <Panel title="Liquidity, last 10 minutes" className="heat">
+          <Panel title={text.liquidity} className="heat">
             <Heatmap
               ref={heatmap}
               data={heatRange ? undefined : null}
@@ -376,16 +433,16 @@ export function App() {
               // height while paused.
               height={DEPTH * 2 * rowHeight}
               tokensVersion={rowHeight}
-              label="Displayed liquidity over the last 10 minutes"
+              label={text.liquidityLabel}
               description={
                 heatRange
-                  ? `Prices from ${n(heatRange.top, 2)} at the top to ${n(heatRange.bottom, 2)} at the bottom, a cent a row, around the midpoint now. Time runs left to right, 2.5 seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`
+                  ? text.liquidityText(n(heatRange.top, 2), n(heatRange.bottom, 2), n(HEATMAP.window / HEATMAP.columns / 1e9, 1))
                   : undefined
               }
             />
           </Panel>
-          <Panel title="Trades" className="trades">
-            <TradeTable caption={`Recent trades in ${symbol}`} trades={tape} />
+          <Panel title={text.trades} className="trades">
+            <TradeTable caption={text.tradesCaption(symbol)} trades={tape} />
           </Panel>
         </main>
       )}
