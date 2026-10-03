@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
 import {
   Button,
@@ -73,8 +73,9 @@ export function App() {
   const trades = useRef<Trade[]>([]);
   const playing = state.matches("playing");
   const speed = state.context.speed;
-  const live = useRef({ playing, speed });
-  live.current = { playing, speed };
+  const ended = state.matches("ended");
+  const live = useRef({ playing, speed, ended });
+  live.current = { playing, speed, ended };
   const stats = useRef({ fps: new Fps(), frame: new Rolling(), seek: new Rolling(), heat: new Rolling(), applied: 0, orders: 0 });
 
   useEffect(() => {
@@ -208,16 +209,23 @@ export function App() {
     return () => cancelAnimationFrame(raf);
   }, [loaded, send]);
 
+  // At the end, play starts again from the beginning: the clock stood at
+  // the end, so playing on from there ended again on the next frame.
+  const toggle = useCallback(() => {
+    if (live.current.ended) t.current = 0;
+    send({ type: "TOGGLE" });
+  }, [send]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === "Space" && (e.target === document.body || e.target === document.documentElement)) {
         e.preventDefault();
-        send({ type: "TOGGLE" });
+        toggle();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [send]);
+  }, [toggle]);
 
   const loading = state.matches("loading");
   const failed = state.matches("failed");
@@ -285,7 +293,7 @@ export function App() {
           </Panel>
           <Panel title="Playback" className="transport">
             <div className="transport-row">
-              <Button autoFocus={focusPlay} variant="primary" onPress={() => send({ type: "TOGGLE" })}>
+              <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
                 {playing ? "Pause" : "Play"}
               </Button>
               <ChoiceGroup<Speed>

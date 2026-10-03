@@ -180,3 +180,15 @@ test("the heatmap is as tall as the book at every density", async ({ page }) => 
   await expect.poll(ladder).toBe(36 * 24);
   await expect.poll(heatmap).toBe(36 * 24);
 });
+
+test("at the end of the day, Play starts again from the beginning", async ({ page }) => {
+  // A start time past the end is clamped to the end.
+  await open(page, Number.MAX_SAFE_INTEGER);
+  const grid = page.locator("main.grid");
+  const end = await clockSeconds(page);
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(grid).toHaveAttribute("data-state", "ended");
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(grid).toHaveAttribute("data-state", "playing");
+  await expect.poll(() => clockSeconds(page)).toBeLessThan(end - 3600);
+});
