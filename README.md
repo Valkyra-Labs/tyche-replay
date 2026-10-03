@@ -21,9 +21,10 @@ pnpm install
 pnpm dev
 ```
 
-The app loads `public/data/20260924_deepplus.tyc` by default (produce it
-with `tyche extract`, see tyche-market); `?symbol=SPY&data=URL&at=NS`
-overrides the symbol, the capture and the start time.
+The app loads AAPL from `public/data/20260924_AAPL_deepplus.tycz` by
+default (produce it with `tyche extract`, see tyche-market);
+`?symbol=SPY&data=URL&at=NS` overrides the symbol, the capture and the
+start time.
 
 ## Data
 
