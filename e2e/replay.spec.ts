@@ -83,6 +83,97 @@ test("the heatmap is drawn while paused, right after the load", async ({ page })
   await expect.poll(() => heatmapInk(page)).toBeGreaterThan(0.01);
 });
 
+test("the heatmap draws the cells the engine sent, the newest column the book now", async ({ page }) => {
+  // 10:06: bids and asks both inside the 80 rows (see src/engine/heatmap.test.ts).
+  const at = TEN_AM + 360e9;
+  await open(page, at);
+  await expect.poll(() => page.evaluate(() => window.__tycheViews?.heatmapTime)).toBe(at);
+  const check = await page.evaluate(() => {
+    const views = window.__tycheViews!;
+    const h = views.heatmap!;
+    const levels = views.levels;
+    const canvas = document.querySelector<HTMLCanvasElement>(".stoa-heatmap__canvas")!;
+    // Token colours as the canvas paints them.
+    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
+    const style = getComputedStyle(canvas);
+    const rgb = (name: string) => {
+      probe.clearRect(0, 0, 1, 1);
+      probe.fillStyle = style.getPropertyValue(name).trim();
+      probe.fillRect(0, 0, 1, 1);
+      return Array.from(probe.getImageData(0, 0, 1, 1).data.slice(0, 3));
+    };
+    const surface = rgb("--stoa-color-surface");
+    const bid = rgb("--stoa-color-bid");
+    const ask = rgb("--stoa-color-ask");
+    // Distance from a pixel to the blends of the surface with a colour.
+    const toBlend = (p: number[], c: number[]) => {
+      let best = Infinity;
+      for (let a = 0.1; a <= 1.0001; a += 0.01) {
+        const d = Math.hypot(...p.map((v, i) => v - (surface[i]! + a * (c[i]! - surface[i]!))));
+        best = Math.min(best, d);
+      }
+      return best;
+    };
+    const ctx = canvas.getContext("2d")!;
+    const { width, height } = canvas;
+    const img = ctx.getImageData(0, 0, width, height).data;
+    const cw = width / h.columns;
+    const rh = height / h.rows;
+    const wrong: string[] = [];
+    let compared = 0;
+    for (let c = 0; c < h.columns; c++) {
+      for (let r = 0; r < h.rows; r++) {
+        const x = Math.floor((c + 0.5) * cw);
+        const y = Math.floor((r + 0.5) * rh);
+        // The price labels sit on plates in the end corners.
+        if (x > width - 80 * devicePixelRatio && (y < 30 * devicePixelRatio || y > height - 30 * devicePixelRatio)) continue;
+        const i = (y * width + x) * 4;
+        const p = [img[i]!, img[i + 1]!, img[i + 2]!];
+        const v = h.cells[c * h.rows + r]!;
+        const blank = p.every((ch, k) => Math.abs(ch - surface[k]!) <= 1);
+        const seen = blank ? "none" : toBlend(p, bid) < toBlend(p, ask) ? "bid" : "ask";
+        const want = v === 0 ? "none" : v > 0 ? "bid" : "ask";
+        compared++;
+        if (seen !== want) wrong.push(`column ${c} row ${r}: ${want} expected, ${seen} drawn`);
+      }
+    }
+    // The newest column against the ladder's book (12 levels a side).
+    const units = (d: number) => Math.round(d * 10_000);
+    const newest = Array.from(h.cells).slice((h.columns - 1) * h.rows);
+    const nb = levels[0]!;
+    const na = levels[1]!;
+    const book: { price: number; size: number; sign: number }[] = [];
+    for (let i = 0; i < nb; i++) book.push({ price: levels[2 + 2 * i]!, size: levels[3 + 2 * i]!, sign: 1 });
+    for (let i = 0; i < na; i++) book.push({ price: levels[2 + 2 * nb + 2 * i]!, size: levels[3 + 2 * nb + 2 * i]!, sign: -1 });
+    const inside = book.filter((l) => {
+      const row = (units(h.top) - units(l.price)) / units(h.tick);
+      return row >= 0 && row < h.rows;
+    });
+    const atRows = inside.map((l) => ({ want: l.sign * l.size, got: newest[(units(h.top) - units(l.price)) / units(h.tick)] }));
+    return {
+      compared,
+      wrong: wrong.slice(0, 10),
+      wrongCount: wrong.length,
+      atRows,
+      filledNewest: newest.filter((v) => v !== 0).length,
+      bestBid: levels[2],
+      bestAsk: levels[2 + 2 * nb],
+      newestPrices: newest.flatMap((v, r) => (v === 0 ? [] : [{ v, price: (units(h.top) - r * units(h.tick)) / 10_000 }])),
+    };
+  });
+  expect(check.compared).toBeGreaterThan(18_000);
+  expect(check.wrong).toEqual([]);
+  expect(check.atRows.length).toBeGreaterThan(0);
+  for (const { want, got } of check.atRows) expect(got).toBe(want);
+  // Every filled cell of the newest column is a level of the book: at the
+  // 12 levels a side of the ladder, these are all of them.
+  expect(check.filledNewest).toBe(check.atRows.length);
+  for (const { v, price } of check.newestPrices) {
+    if (v > 0) expect(price).toBeLessThanOrEqual(check.bestBid!);
+    else expect(price).toBeGreaterThanOrEqual(check.bestAsk!);
+  }
+});
+
 test("the book is described in text for screen readers", async ({ page }) => {
   await open(page);
   await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/);

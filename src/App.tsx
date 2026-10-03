@@ -14,7 +14,8 @@ import {
   type LadderHandle,
   type Trade,
 } from "@valkyra-labs/stoa-react";
-import type { FromWorker, HeatmapRequest, LoadStage, ToWorker } from "./engine/protocol";
+import { HEATMAP } from "./engine/heatmap";
+import type { FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/protocol";
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
@@ -22,12 +23,20 @@ import { clampTime, clock, parseAt, stepOrigin } from "./ui/time";
 
 const DEPTH = 12;
 const TAPE_WINDOW_NS = 60e9;
-const HEATMAP: HeatmapRequest = { window: 600e9, columns: 240, rows: 80, tick: 0.01 };
 const HEATMAP_EVERY_MS = 250;
 const SCRUB_STEP_NS = 1e9;
 // The slider shows the clock itself, to the whole nanosecond (stepOrigin
 // needs whole numbers); while playing the clock moves in fractions of one.
 const wholeNs = Math.round;
+
+declare global {
+  interface Window {
+    /** What the app last handed to the ladder and the heatmap, and the
+     * clock each was for. Set in development builds only, for the
+     * end-to-end tests. */
+    __tycheViews?: { time: number; levels: Float64Array; heatmapTime: number; heatmap: HeatmapResult | null };
+  }
+}
 
 type Loaded = { duration: number; startEpochMs: number; messages: number; loadMs: number; bytes: number };
 
@@ -124,6 +133,10 @@ export function App() {
           setHeatmapEmpty(false);
         } else if (m.heatmap === null) {
           setHeatmapEmpty(true);
+        }
+        if (import.meta.env.DEV) {
+          const shown = m.heatmap === undefined ? (window.__tycheViews ?? { heatmapTime: -1, heatmap: null }) : { heatmapTime: m.time, heatmap: m.heatmap };
+          window.__tycheViews = { ...shown, time: m.time, levels: m.levels };
         }
         const fresh: Trade[] = [];
         for (let i = 0; i + 3 < m.trades.length; i += 4) {

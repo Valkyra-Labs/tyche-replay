@@ -2,6 +2,7 @@
 // the UI thread. The UI asks for the book at a time; the latest request
 // wins, because the UI only sends a new one after the previous answer.
 import init, { TycheReplay } from "tyche-market";
+import { heatmapFrame } from "./heatmap";
 import type { FromWorker, HeatmapResult, ToWorker } from "./protocol";
 
 let replay: TycheReplay | null = null;
@@ -53,8 +54,8 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       } else if (msg.heatmap) {
         const h = msg.heatmap;
         const t1 = performance.now();
-        const top = Math.round(mid / h.tick) * h.tick + (h.rows / 2) * h.tick;
-        const cells = new Float32Array(replay.heatmap(Math.max(0, msg.time - h.window), msg.time, h.columns, top, h.tick, h.rows));
+        const { from, to, top } = heatmapFrame(msg.time, mid, h);
+        const cells = new Float32Array(replay.heatmap(from, to, h.columns, top, h.tick, h.rows));
         heatmap = { cells, columns: h.columns, rows: h.rows, top, tick: h.tick, ms: performance.now() - t1 };
         transfer.push(cells.buffer);
       }
