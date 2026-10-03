@@ -15,6 +15,7 @@ import {
 } from "@valkyra-labs/stoa-react";
 import type { FromWorker, HeatmapRequest, ToWorker } from "./engine/protocol";
 import { SPEEDS, transport, type Speed } from "./transport";
+import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
 import { clock } from "./ui/time";
 
@@ -48,6 +49,8 @@ export function App() {
   const shownScrub = useRef(0);
   const [hud, setHud] = useState({ fps: 0, frameP95: 0, seekP95: 0, heatmapP95: 0, msgsPerSec: 0, orders: 0 });
 
+  const root = useRef<HTMLDivElement>(null);
+  const rowHeight = useRowHeight(root);
   const ladder = useRef<LadderHandle>(null);
   const heatmap = useRef<HeatmapHandle>(null);
   const worker = useRef<Worker | null>(null);
@@ -183,7 +186,7 @@ export function App() {
   const n = (v: number, digits = 0) => v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
   return (
-    <div className="app">
+    <div className="app" ref={root}>
       <header className="bar">
         <h1>Tyche Replay</h1>
         <span className="muted">{symbol} on IEX</span>
@@ -206,7 +209,11 @@ export function App() {
           <Panel title="Liquidity, last 10 minutes" className="heat">
             <Heatmap
               ref={heatmap}
-              height={DEPTH * 2 * 22}
+              // As tall as the ladder beside it: DEPTH rows a side at the
+              // density's row height. The version redraws it at a new
+              // height while paused.
+              height={DEPTH * 2 * rowHeight}
+              tokensVersion={rowHeight}
               label="Displayed liquidity over the last 10 minutes"
               description="Bids below the midpoint, asks above; darker cells hold more shares. Time runs left to right."
             />

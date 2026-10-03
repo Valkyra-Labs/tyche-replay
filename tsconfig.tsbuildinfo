@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/transport.test.ts","./src/transport.ts","./src/engine/protocol.ts","./src/engine/replay.worker.ts","./src/ui/perf.ts","./src/ui/time.ts","./vite.config.ts"],"version":"6.0.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/transport.test.ts","./src/transport.ts","./src/engine/protocol.ts","./src/engine/replay.worker.ts","./src/ui/density.ts","./src/ui/perf.ts","./src/ui/time.ts","./vite.config.ts"],"version":"6.0.3"}

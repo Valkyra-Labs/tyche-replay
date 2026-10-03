@@ -86,3 +86,31 @@ test.describe("on a Russian browser", () => {
     for (const text of await prices.allTextContents()) expect(text).toMatch(/^[\d,]+(\.\d\d)?$/);
   });
 });
+
+test("the heatmap is as tall as the book at every density", async ({ page }) => {
+  await open(page);
+  const height = (selector: string) => page.locator(selector).evaluate((el) => el.getBoundingClientRect().height);
+  const ladder = () => height(".stoa-ladder__canvas");
+  const heatmap = () => height(".stoa-heatmap__canvas");
+  // Regular density by default: 28 px rows, 12 levels a side.
+  await expect.poll(ladder).toBe(28 * 24);
+  await expect.poll(heatmap).toBe(28 * 24);
+  // A density set on an ancestor, announced with Stoa's token signal.
+  // (On <html> itself, compact is outranked by the :root default in
+  // Stoa's tokens.css, so this goes through <body>.)
+  for (const [density, row] of [["compact", 24], ["comfortable", 36], ["regular", 28]] as const) {
+    await page.evaluate((d) => {
+      document.body.dataset.density = d;
+      document.body.dispatchEvent(new CustomEvent("stoa:tokens", { bubbles: true }));
+    }, density);
+    await expect.poll(ladder).toBe(row * 24);
+    await expect.poll(heatmap).toBe(row * 24);
+  }
+  // A density set on <html>, which Stoa watches without a signal.
+  await page.evaluate(() => {
+    delete document.body.dataset.density;
+    document.documentElement.dataset.density = "comfortable";
+  });
+  await expect.poll(ladder).toBe(36 * 24);
+  await expect.poll(heatmap).toBe(36 * 24);
+});
