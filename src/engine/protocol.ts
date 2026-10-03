@@ -8,7 +8,11 @@ export type ToWorker =
 
 export type HeatmapResult = { cells: Float32Array; columns: number; rows: number; top: number; tick: number; ms: number };
 
+/** Where a load is: fetching the capture, then inflating and indexing it. */
+export type LoadStage = "downloading" | "decoding";
+
 export type FromWorker =
+  | { kind: "progress"; stage: LoadStage }
   | { kind: "loaded"; duration: number; startEpochMs: number; messages: number; loadMs: number; bytes: number }
   | { kind: "error"; message: string }
   | {
@@ -18,7 +22,9 @@ export type FromWorker =
       levels: Float64Array;
       /** [time, price, size, side] per execution since tradesFrom */
       trades: Float64Array;
-      heatmap?: HeatmapResult;
+      /** Absent when not asked for; null when asked for but there is no
+       * midpoint to centre it on (one side of the book is empty). */
+      heatmap?: HeatmapResult | null;
       applied: number;
       orders: number;
       seekMs: number;

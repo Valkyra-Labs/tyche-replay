@@ -7,13 +7,14 @@ import {
   Ladder,
   Panel,
   StatBar,
+  StatusBadge,
   TimeSlider,
   TradeTable,
   type HeatmapHandle,
   type LadderHandle,
   type Trade,
 } from "@valkyra-labs/stoa-react";
-import type { FromWorker, HeatmapRequest, ToWorker } from "./engine/protocol";
+import type { FromWorker, HeatmapRequest, LoadStage, ToWorker } from "./engine/protocol";
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
@@ -41,6 +42,15 @@ export function App() {
   const [{ symbol, data, at }] = useState(params);
   const [state, send] = useMachine(transport);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [stage, setStage] = useState<LoadStage>("downloading");
+  // Each retry loads the capture again in a new worker.
+  const [attempt, setAttempt] = useState(0);
+  // Until the first heatmap arrives, and whenever the book has no
+  // midpoint, the heatmap shows Stoa's empty state.
+  const [heatmapEmpty, setHeatmapEmpty] = useState(true);
+  // Focus was on the load status (after Retry) when the load finished: the
+  // status goes away, so the Play button takes focus rather than the page.
+  const [focusPlay, setFocusPlay] = useState(false);
   const [tape, setTape] = useState<Trade[]>([]);
   const [scrub, setScrub] = useState(0);
   // The slider is controlled by the clock ten times a second; it answers
@@ -51,6 +61,7 @@ export function App() {
 
   const root = useRef<HTMLDivElement>(null);
   const rowHeight = useRowHeight(root);
+  const status = useRef<HTMLDivElement>(null);
   const ladder = useRef<LadderHandle>(null);
   const heatmap = useRef<HeatmapHandle>(null);
   const worker = useRef<Worker | null>(null);
@@ -67,24 +78,49 @@ export function App() {
   const stats = useRef({ fps: new Fps(), frame: new Rolling(), seek: new Rolling(), heat: new Rolling(), applied: 0, orders: 0 });
 
   useEffect(() => {
+    pending.current = false;
+    lastAsked.current = -1;
+    lastHeatmap.current = -Infinity;
+    heatmapFor.current = -1;
+    trades.current = [];
+    setTape([]);
+    setStage("downloading");
+    setHeatmapEmpty(true);
     const w = new Worker(new URL("./engine/replay.worker.ts", import.meta.url), { type: "module" });
     worker.current = w;
+    const fail = (message: string) => {
+      setLoaded(null);
+      send({ type: "FAILED", message });
+    };
+    // A worker that cannot start (its module or the WebAssembly fails to
+    // load) or crashes says so here, not with an error message.
+    w.onerror = (e) => {
+      e.preventDefault();
+      fail(e.message || "The replay engine stopped.");
+    };
+    w.onmessageerror = () => fail("The replay engine sent a message that could not be read.");
     w.onmessage = (e: MessageEvent<FromWorker>) => {
       const m = e.data;
-      if (m.kind === "loaded") {
+      if (m.kind === "progress") {
+        setStage(m.stage);
+      } else if (m.kind === "loaded") {
         t.current = Math.min(at, m.duration);
         shownScrub.current = snap(t.current);
         setScrub(shownScrub.current);
+        setFocusPlay(status.current?.contains(document.activeElement) ?? false);
         setLoaded(m);
         send({ type: "LOADED" });
       } else if (m.kind === "error") {
-        send({ type: "FAILED", message: m.message });
+        fail(m.message);
       } else {
         pending.current = false;
         ladder.current?.draw(m.levels);
         if (m.heatmap) {
           heatmap.current?.draw(m.heatmap);
           stats.current.heat.push(m.heatmap.ms);
+          setHeatmapEmpty(false);
+        } else if (m.heatmap === null) {
+          setHeatmapEmpty(true);
         }
         const fresh: Trade[] = [];
         for (let i = 0; i + 3 < m.trades.length; i += 4) {
@@ -105,7 +141,7 @@ export function App() {
     };
     w.postMessage({ kind: "load", url: data, symbol } satisfies ToWorker);
     return () => w.terminate();
-  }, [data, symbol, at, send]);
+  }, [data, symbol, at, send, attempt]);
 
   // One loop: advance the clock, ask the worker for the book (only when
   // the previous answer arrived), refresh slow views a few times a second.
@@ -183,6 +219,15 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [send]);
 
+  const loading = state.matches("loading");
+  const failed = state.matches("failed");
+  const retry = () => {
+    // The Retry button goes away while loading; focus waits on the status.
+    status.current?.focus();
+    setAttempt((a) => a + 1);
+    send({ type: "RETRY" });
+  };
+
   const n = (v: number, digits = 0) => v.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: digits });
 
   return (
@@ -195,13 +240,29 @@ export function App() {
           Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.
         </span>
       </header>
-      {state.matches("failed") && (
-        <p role="alert" className="error">
-          {state.context.error}
-        </p>
+      {(loading || failed) && (
+        <main className="load">
+          <Panel title={`${symbol} capture`}>
+            {/* One polite status for the whole load: a message per stage,
+                not per byte. It stays mounted across a retry. */}
+            <div role="status" ref={status} tabIndex={-1} className="load-status">
+              {loading && (
+                <StatusBadge tone="neutral">
+                  {stage === "downloading" ? `Downloading the ${symbol} capture…` : `Decoding the ${symbol} capture…`}
+                </StatusBadge>
+              )}
+            </div>
+            {failed && (
+              <div role="alert" className="load-failure">
+                <StatusBadge tone="negative">Could not load the {symbol} capture.</StatusBadge>
+                <p className="muted">{state.context.error}</p>
+              </div>
+            )}
+            {failed && <Button onPress={retry}>Retry</Button>}
+          </Panel>
+        </main>
       )}
-      {state.matches("loading") && <p className="muted pad">Loading {symbol}…</p>}
-      {loaded && (
+      {loaded && !failed && (
         <main className="grid" data-state={String(state.value)} data-speed={speed}>
           <Panel title="Book" className="book">
             <Ladder ref={ladder} depth={DEPTH} label={`Order book for ${symbol}, ${DEPTH} levels per side`} />
@@ -209,6 +270,7 @@ export function App() {
           <Panel title="Liquidity, last 10 minutes" className="heat">
             <Heatmap
               ref={heatmap}
+              data={heatmapEmpty ? null : undefined}
               // As tall as the ladder beside it: DEPTH rows a side at the
               // density's row height. The version redraws it at a new
               // height while paused.
@@ -223,7 +285,7 @@ export function App() {
           </Panel>
           <Panel title="Playback" className="transport">
             <div className="transport-row">
-              <Button variant="primary" onPress={() => send({ type: "TOGGLE" })}>
+              <Button autoFocus={focusPlay} variant="primary" onPress={() => send({ type: "TOGGLE" })}>
                 {playing ? "Pause" : "Play"}
               </Button>
               <ChoiceGroup<Speed>

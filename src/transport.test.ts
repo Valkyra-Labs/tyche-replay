@@ -31,4 +31,29 @@ describe("transport", () => {
     expect(a.getSnapshot().value).toBe("failed");
     expect(a.getSnapshot().context.error).toBe("404");
   });
+
+  it("fails from any state, and a retry loads again with the speed kept", () => {
+    const a = createActor(transport).start();
+    a.send({ type: "LOADED" });
+    a.send({ type: "SPEED", speed: 60 });
+    a.send({ type: "PLAY" });
+    a.send({ type: "FAILED", message: "worker stopped" });
+    expect(a.getSnapshot().value).toBe("failed");
+    expect(a.getSnapshot().context.error).toBe("worker stopped");
+    a.send({ type: "RETRY" });
+    expect(a.getSnapshot().value).toBe("loading");
+    expect(a.getSnapshot().context.error).toBeNull();
+    expect(a.getSnapshot().context.speed).toBe(60);
+    a.send({ type: "LOADED" });
+    expect(a.getSnapshot().value).toBe("paused");
+  });
+
+  it("retries only after a failure", () => {
+    const a = createActor(transport).start();
+    a.send({ type: "RETRY" });
+    expect(a.getSnapshot().value).toBe("loading");
+    a.send({ type: "LOADED" });
+    a.send({ type: "RETRY" });
+    expect(a.getSnapshot().value).toBe("paused");
+  });
 });

@@ -8,9 +8,11 @@ let replay: TycheReplay | null = null;
 const post = (m: FromWorker, transfer: Transferable[] = []) => self.postMessage(m, { transfer });
 
 async function load(url: string): Promise<Uint8Array> {
+  post({ kind: "progress", stage: "downloading" });
   const res = await fetch(url);
   if (!res.ok) throw new Error(`cannot load ${url}: ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
+  post({ kind: "progress", stage: "decoding" });
   // Captures ship gzipped (.tycz). Decide by the gzip magic, not by the
   // name or headers: some servers inflate on the way, some do not.
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
@@ -43,10 +45,12 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       const levels = new Float64Array(replay.levels(msg.depth));
       const trades = new Float64Array(replay.executions(msg.tradesFrom, msg.time));
       const seekMs = performance.now() - t0;
-      let heatmap: HeatmapResult | undefined;
+      let heatmap: HeatmapResult | null | undefined;
       const transfer: Transferable[] = [levels.buffer, trades.buffer];
       const mid = replay.mid();
-      if (msg.heatmap && Number.isFinite(mid)) {
+      if (msg.heatmap && !Number.isFinite(mid)) {
+        heatmap = null;
+      } else if (msg.heatmap) {
         const h = msg.heatmap;
         const t1 = performance.now();
         const top = Math.round(mid / h.tick) * h.tick + (h.rows / 2) * h.tick;
@@ -57,6 +61,6 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       post({ kind: "state", time: msg.time, levels, trades, heatmap, applied, orders: replay.orderCount(), seekMs }, transfer);
     }
   } catch (err) {
-    post({ kind: "error", message: String(err) });
+    post({ kind: "error", message: err instanceof Error ? err.message : String(err) });
   }
 };
