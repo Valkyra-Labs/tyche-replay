@@ -9,8 +9,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "vitest run --exclude e2e/**",
-    "test:no-capture": "vitest run --exclude e2e/** --exclude src/engine/heatmap.test.ts",
+    "test": "vitest run --exclude \"e2e/**\"",
+    "test:no-capture": "vitest run --exclude \"e2e/**\" --exclude src/engine/heatmap.test.ts",
     "e2e": "playwright test",
     "e2e:no-capture": "playwright test --grep @no-capture"
   },
