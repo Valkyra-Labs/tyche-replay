@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
 import {
+  AppHeader,
   Button,
   ChoiceGroup,
   Heatmap,
@@ -301,41 +302,46 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
 
   return (
     <div className="app" ref={root}>
-      <header className="bar">
-        <h1>{text.title}</h1>
-        <span className="muted">{text.onIex(symbol)}</span>
-        <span className="spacer" />
-        <span className="muted">
-          {text.attribution}
-          <a href={IEX_TERMS}>{text.terms}</a>
-          {text.attributionEnd}
-        </span>
-        <ChoiceGroup<Theme>
-          size="small"
-          label={text.theme}
-          value={theme ?? systemTheme}
-          onChange={(next) => {
-            saveTheme(next);
-            setTheme(next);
-          }}
-          choices={[
-            { id: "light", label: text.light },
-            { id: "dark", label: text.dark },
-          ]}
-        />
-        <ChoiceGroup<Lang>
-          size="small"
-          label={text.language}
-          value={lang}
-          onChange={onLang}
-          // The same EN / AR pair as the themis-steps demo; each code is
-          // named in English, the language it is written in.
-          choices={[
-            { id: "en", label: <span lang="en">EN</span> },
-            { id: "ar", label: <span lang="en">AR</span> },
-          ]}
-        />
-      </header>
+      <AppHeader
+        title={text.title}
+        subtitle={text.onIex(symbol)}
+        note={
+          <>
+            {text.attribution}
+            <a href={IEX_TERMS}>{text.terms}</a>
+            {text.attributionEnd}
+          </>
+        }
+        actions={
+          <>
+            <ChoiceGroup<Theme>
+              size="small"
+              label={text.theme}
+              value={theme ?? systemTheme}
+              onChange={(next) => {
+                saveTheme(next);
+                setTheme(next);
+              }}
+              choices={[
+                { id: "light", label: text.light },
+                { id: "dark", label: text.dark },
+              ]}
+            />
+            <ChoiceGroup<Lang>
+              size="small"
+              label={text.language}
+              value={lang}
+              onChange={onLang}
+              // The same EN / AR pair as the themis-steps demo; each code is
+              // named in English, the language it is written in.
+              choices={[
+                { id: "en", label: <span lang="en">EN</span> },
+                { id: "ar", label: <span lang="en">AR</span> },
+              ]}
+            />
+          </>
+        }
+      />
       {(loading || failed) && (
         <main className="load">
           <Panel title={text.capture(symbol)}>

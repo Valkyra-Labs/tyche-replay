@@ -20,12 +20,6 @@
   color: var(--stoa-color-text);
 }
 body { margin: 0; }
-.bar { display: flex; flex-wrap: wrap; gap: var(--stoa-space-3); align-items: baseline; padding: var(--stoa-space-2) var(--stoa-space-4); border-block-end: 1px solid var(--stoa-color-border); background: var(--stoa-color-surface); }
-/* Semibold, a weight loaded for both scripts, so neither is synthesised. */
-.bar h1 { font-size: var(--stoa-font-size-md); font-weight: var(--stoa-font-weight-semibold); margin: 0; }
-.spacer { flex: 1; }
-/* The terms link reads as part of the note, underlined. */
-.bar a { color: inherit; }
 .muted { color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-2xs); }
 .load { padding: var(--stoa-space-3); }
 .load .stoa-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--stoa-space-2); }
