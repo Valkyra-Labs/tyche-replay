@@ -21,15 +21,12 @@
 }
 body { margin: 0; }
 .muted { color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-2xs); }
-.foot { padding: var(--stoa-space-2) var(--stoa-space-4) var(--stoa-space-4); color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-sm); background: transparent; }
-.foot a { color: inherit; }
-.load { padding: var(--stoa-space-3); }
 .load .stoa-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--stoa-space-2); }
 .load .stoa-panel__title { margin: 0; }
 .load-status:focus { outline: none; }
 .load-failure p { margin: var(--stoa-space-1) 0 0; }
 .grid {
-  display: grid; gap: var(--stoa-space-3); padding: var(--stoa-space-3);
+  display: grid; gap: var(--stoa-space-3);
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(260px, 340px);
   grid-template-areas: "transport transport transport" "hud hud hud" "book heat trades";
 }

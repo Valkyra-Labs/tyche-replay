@@ -317,7 +317,7 @@ test("the heatmap is as tall as the book at every density", async ({ page }) => 
 test("at the end of the day, Play starts again from the beginning", async ({ page }) => {
   // A start time past the end is clamped to the end.
   await open(page, Number.MAX_SAFE_INTEGER);
-  const grid = page.locator("main.grid");
+  const grid = page.locator(".grid");
   const end = await clockSeconds(page);
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "ended");
@@ -384,7 +384,7 @@ test.describe("the theme", () => {
     expect(new URL(page.url()).searchParams.get("theme")).toBe("light");
     expect(await page.evaluate(() => localStorage.getItem("tyche-replay:theme"))).toBe("light");
     // Paused: nothing but the theme asks the canvases to draw again.
-    await expect(page.locator("main.grid")).toHaveAttribute("data-state", "paused");
+    await expect(page.locator(".grid")).toHaveAttribute("data-state", "paused");
     await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
     await expect.poll(() => surfaceShare(page, ladder)).toBeGreaterThan(0.5);
     expect(await colours()).not.toBe(darkLadder);
@@ -469,7 +469,7 @@ test.describe("the language", () => {
     await expect(page.getByRole("heading", { name: "التشغيل" })).toBeVisible();
     await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
     // Paused, the canvases draw their words and digits again in Arabic.
-    await expect(page.locator("main.grid")).toHaveAttribute("data-state", "paused");
+    await expect(page.locator(".grid")).toHaveAttribute("data-state", "paused");
     await expect.poll(() => drawn(".stoa-ladder__canvas")).not.toBe(ladderEn);
     await expect.poll(() => drawn(".stoa-heatmap__canvas")).not.toBe(heatmapEn);
     // The tape and the clock in Arabic-Indic digits.
@@ -585,4 +585,35 @@ test("the IEX terms sit in a footer with no fill, not in the header", async ({ p
   await expect(footer.getByRole("link")).toBeVisible();
   await expect(footer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(page.getByRole("banner")).not.toContainText("IEX Historical Data");
+});
+
+test("the header stays at the top and the page scrolls under it, with Stoa's scrollbars", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await open(page);
+  const banner = page.getByRole("banner");
+  const before = (await banner.boundingBox())!;
+  const scroll = page.locator(".stoa-page-shell__scroll");
+  await scroll.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await expect(page.getByRole("contentinfo")).toBeInViewport();
+  expect(await banner.boundingBox()).toEqual(before);
+  expect(await page.evaluate(() => document.scrollingElement!.scrollHeight > window.innerHeight)).toBe(false);
+  const region = (await scroll.boundingBox())!;
+  expect(region.y).toBeGreaterThanOrEqual(before.y + before.height - 1);
+  for (const theme of ["light", "dark"]) {
+    await page.getByRole("radio", { name: theme === "light" ? "Light" : "Dark" }).click();
+    const style = await scroll.evaluate((el) => {
+      const probe = (name: string) => {
+        const span = document.createElement("span");
+        span.style.color = `var(${name})`;
+        el.appendChild(span);
+        const value = getComputedStyle(span).color;
+        span.remove();
+        return value;
+      };
+      const own = getComputedStyle(el);
+      return { width: own.scrollbarWidth, color: own.scrollbarColor, expected: `${probe("--stoa-color-scrollbar-thumb")} ${probe("--stoa-color-scrollbar-track")}` };
+    });
+    expect(style.width, theme).toBe("thin");
+    expect(style.color, theme).toBe(style.expected);
+  }
 });
