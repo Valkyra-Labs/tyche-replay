@@ -23,7 +23,7 @@ import { strings, type Lang } from "./i18n";
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
-import { applyTheme, pickTheme, saveTheme, storedTheme, useSystemTheme, type Theme } from "./ui/prefs";
+import { applyTheme, forgetTheme, pickTheme, saveTheme, storedTheme, useSystemTheme, type Theme, type ThemeChoice } from "./ui/prefs";
 import { clampTime, clock, parseAt, stepOrigin } from "./ui/time";
 
 const DEPTH = 12;
@@ -63,8 +63,8 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   const text = strings[lang];
   const format = useStoaFormat();
   const [state, send] = useMachine(transport);
-  // None until the viewer picks one: the page follows the system, and the
-  // switch shows the system's scheme.
+  // None until the viewer picks Light or Dark: the page follows the
+  // system, and the switch shows System.
   const [theme, setTheme] = useState<Theme | null>(() => pickTheme(location.search, storedTheme()));
   const systemTheme = useSystemTheme();
   // Stoa's canvases watch data-theme on <html> and redraw in the new
@@ -106,6 +106,12 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     document.fonts.addEventListener("loadingdone", redraw);
     return () => document.fonts.removeEventListener("loadingdone", redraw);
   }, []);
+  // Following the system, a change of the system's scheme changes the
+  // tokens without touching data-theme, so the canvases are asked to draw
+  // again.
+  useEffect(() => {
+    if (theme === null && root.current) signalTokensChanged(root.current);
+  }, [systemTheme, theme]);
   const status = useRef<HTMLDivElement>(null);
   const ladder = useRef<LadderHandle>(null);
   const heatmap = useRef<HeatmapHandle>(null);
@@ -307,15 +313,21 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
         subtitle={text.onIex(symbol)}
         actions={
           <>
-            <ChoiceGroup<Theme>
+            <ChoiceGroup<ThemeChoice>
               size="small"
               label={text.theme}
-              value={theme ?? systemTheme}
+              value={theme ?? "system"}
               onChange={(next) => {
-                saveTheme(next);
-                setTheme(next);
+                if (next === "system") {
+                  forgetTheme();
+                  setTheme(null);
+                } else {
+                  saveTheme(next);
+                  setTheme(next);
+                }
               }}
               choices={[
+                { id: "system", label: text.system },
                 { id: "light", label: text.light },
                 { id: "dark", label: text.dark },
               ]}

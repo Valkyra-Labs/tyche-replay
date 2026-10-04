@@ -358,7 +358,8 @@ test.describe("the theme", () => {
     await open(page);
     expect(await page.locator("html").getAttribute("data-theme")).toBeNull();
     const group = page.getByRole("radiogroup", { name: "Theme" });
-    await expect(group.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
+    // System is the default and the switch says so.
+    await expect(group.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
     // The surface is dark, and the heatmap is drawn on it.
     const surface = await page.locator(".stoa-heatmap__canvas").evaluate((c) => {
       const probe = document.createElement("canvas").getContext("2d")!;
@@ -400,6 +401,20 @@ test.describe("the theme", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await expect.poll(() => surfaceShare(page, heatmap)).toBeGreaterThan(0.5);
     expect(await colours()).toBe(darkLadder);
+  });
+
+  test("System clears the choice and the page follows the scheme again", async ({ page }) => {
+    await open(page);
+    await page.getByRole("radio", { name: "Light" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("radio", { name: "System" }).click();
+    expect(await page.locator("html").getAttribute("data-theme")).toBeNull();
+    expect(new URL(page.url()).searchParams.get("theme")).toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem("tyche-replay:theme"))).toBeNull();
+    // The system is dark here, and the canvases are drawn dark again.
+    await expect.poll(() => surfaceShare(page, ".stoa-heatmap__canvas")).toBeGreaterThan(0.5);
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
   });
 
   test("?theme= wins over the remembered choice", async ({ page }) => {
