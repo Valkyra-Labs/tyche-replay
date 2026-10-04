@@ -41,20 +41,33 @@ const readJson = (path) => {
 };
 
 const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
-const VITEST = /^\s*Tests\s+(.+?)\s+\((\d+)\)\s*$/;
+const SUMMARY = (name) => new RegExp(`^\\s*${name}\\s+(.+?)\\s+\\((\\d+)\\)\\s*$`);
 
-/** Counts from the one Vitest summary in a unit test log. */
-export function parseVitest(text) {
-  const lines = text.replace(ANSI, "").split(/\r?\n/).filter((l) => VITEST.test(l));
-  if (lines.length !== 1) fail(`expected one Vitest summary in the unit test log, found ${lines.length}`);
-  const [, parts, total] = VITEST.exec(lines[0]);
-  const counts = { passed: 0, failed: 0, skipped: 0, todo: 0 };
+/** The counts on one Vitest summary line ("Test Files" or "Tests"); there
+ * must be exactly one, and its parts must add up to its total. */
+function vitestLine(lines, name, kinds) {
+  const re = SUMMARY(name);
+  const found = lines.filter((l) => re.test(l));
+  if (found.length !== 1) fail(`expected one Vitest "${name}" summary in the unit test log, found ${found.length}`);
+  const [, parts, total] = re.exec(found[0]);
+  const counts = Object.fromEntries(kinds.map((k) => [k, 0]));
   for (const part of parts.split("|")) {
-    const p = /^\s*(\d+) (passed|failed|skipped|todo)\s*$/.exec(part);
-    if (!p) fail(`unrecognised Vitest summary: "${lines[0].trim()}"`);
+    const p = new RegExp(`^\\s*(\\d+) (${kinds.join("|")})\\s*$`).exec(part);
+    if (!p) fail(`unrecognised Vitest summary: "${found[0].trim()}"`);
     counts[p[2]] += Number(p[1]);
   }
-  if (counts.passed + counts.failed + counts.skipped + counts.todo !== Number(total)) fail(`Vitest summary does not add up: "${lines[0].trim()}"`);
+  if (Object.values(counts).reduce((a, b) => a + b, 0) !== Number(total)) fail(`Vitest summary does not add up: "${found[0].trim()}"`);
+  return counts;
+}
+
+/** Counts from the one Vitest summary in the output of `pnpm test`. A test
+ * file that failed to load counts as a failure even when no test in it
+ * ran. */
+export function parseVitest(text) {
+  const lines = text.replace(ANSI, "").split(/\r?\n/);
+  const files = vitestLine(lines, "Test Files", ["passed", "failed", "skipped"]);
+  if (files.failed > 0) fail(`${files.failed} unit test file(s) failed`);
+  const counts = vitestLine(lines, "Tests", ["passed", "failed", "skipped", "todo"]);
   if (counts.failed > 0) fail(`${counts.failed} unit test(s) failed`);
   if (counts.passed === 0) fail("no unit test passed");
   return { passed: counts.passed, skipped: counts.skipped + counts.todo };
