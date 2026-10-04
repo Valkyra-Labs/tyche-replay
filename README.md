@@ -1,5 +1,15 @@
 # Tyche Replay
 
+[![CI](https://github.com/Valkyra-Labs/tyche-replay/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Valkyra-Labs/tyche-replay/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Unit tests (no capture)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/tyche-replay/badges/unit-tests.json)](#badges)
+[![e2e (no capture)](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/tyche-replay/badges/e2e.json)](#badges)
+[![Bundle gzip](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Valkyra-Labs/tyche-replay/badges/bundle-size.json)](#badges)
+
+The test and size badges are measured and published by CI from `main`.
+CI has no capture of a trading day, so the test badges count only the
+tests that need none; see [Badges](#badges).
+
 Replay a trading day of IEX market data in the browser: the order book
 rebuilt order by order, the trades, at any speed and any moment.
 
@@ -49,6 +59,41 @@ start time; `?theme=light|dark` and `?lang=en|ar` set the theme and the
 language (the switches keep them there, and the theme in localStorage
 too). The unit tests check the heatmap against the engine on the same
 AAPL capture, so `pnpm test` needs it too.
+
+The full suites, with the capture in `public/data/`:
+
+```bash
+pnpm test && pnpm e2e
+```
+
+`pnpm e2e` drives the dev server on 5174 and reuses one already running
+there; `E2E_PORT` moves it to another port, and `E2E_PREVIEW=1` tests
+the production build (after `pnpm build`) through `vite preview`.
+Without a capture, `pnpm test:no-capture` runs the unit tests but the
+heatmap's, and `pnpm e2e:no-capture` the e2e tests tagged `@no-capture`;
+that is what CI runs.
+
+### Badges
+
+CI checks out this repository, stoa-system and tyche-market side by side,
+builds the engine with wasm-pack (`--no-default-features --features
+wasm`) and Stoa, then builds and tests the app. It does not download a
+capture, so it runs only the tests that need none. Each green run on
+`main` publishes the dynamic badges to the `badges` branch, as JSON that
+img.shields.io reads; `scripts/badges.mjs` builds them from that run's
+own output and stops, publishing nothing, when a value cannot be read.
+
+- Unit tests (no capture): Vitest tests passed in `pnpm test:no-capture`,
+  every unit test but the heatmap's, which replays the AAPL capture.
+- e2e (no capture): Playwright tests passed in Chromium against `vite
+  preview` of the build, only those tagged `@no-capture` (a failed load
+  explained in Arabic, with an axe check; the IEX terms in the footer).
+  The rest replay the AAPL day and run locally with the capture.
+- Bundle gzip: every JavaScript and CSS file in `dist/`, gzip level 9,
+  summed. The engine's WebAssembly and the fonts are not included.
+
+There is no Lighthouse badge: without a capture the page shows only its
+loading error, not the replay a visitor sees.
 
 ## Data
 

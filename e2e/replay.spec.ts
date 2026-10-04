@@ -1,6 +1,7 @@
 // End-to-end checks on a real day (AAPL, 2026-09-24): the replay moves at
 // the chosen speed, the controls work with a real mouse and keyboard, and
-// axe finds no serious accessibility violations.
+// axe finds no serious accessibility violations. All but the tests tagged
+// @no-capture need the day's capture in public/data/ (see the README).
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -507,7 +508,8 @@ test.describe("the language", () => {
     expect(en.map((t) => t.where).sort()).toEqual(arabic.map((t) => t.where).sort());
   });
 
-  test("says why a load failed in Arabic", async ({ page }) => {
+  // Needs no capture: the request for it is answered with a 404 here.
+  test("says why a load failed in Arabic", { tag: "@no-capture" }, async ({ page }) => {
     await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
     await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
     const alert = page.getByRole("alert");
@@ -578,7 +580,8 @@ test.describe("on a phone", () => {
   });
 });
 
-test("the IEX terms sit in a footer with no fill, not in the header", async ({ page }) => {
+// Needs no capture: the footer is there whether the day loads or not.
+test("the IEX terms sit in a footer with no fill, not in the header", { tag: "@no-capture" }, async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}`);
   const footer = page.getByRole("contentinfo");
   await expect(footer).toContainText("IEX Historical Data");
