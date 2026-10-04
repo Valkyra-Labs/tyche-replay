@@ -12,6 +12,10 @@ describe("pickTheme", () => {
     expect(pickTheme("?symbol=AAPL", "light")).toBe("light");
   });
 
+  it("takes ?theme=system as the system, over a remembered choice", () => {
+    expect(pickTheme("?theme=system", "dark")).toBeNull();
+  });
+
   it("follows the system when neither names a theme", () => {
     expect(pickTheme("", null)).toBeNull();
     expect(pickTheme("?theme=blue", "sepia")).toBeNull();

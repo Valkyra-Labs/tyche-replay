@@ -6,15 +6,19 @@ import { useEffect, useState } from "react";
 import type { Lang } from "../i18n";
 
 export type Theme = "light" | "dark";
+/** What the switch offers: a theme, or System (follow the scheme). */
+export type ThemeChoice = Theme | "system";
 
 const THEME_KEY = "tyche-replay:theme";
 
 const isTheme = (v: string | null | undefined): v is Theme => v === "light" || v === "dark";
 
 /** The theme asked for in `?theme=`, else the one `stored` last, else
- * none (follow the system). */
+ * none (follow the system). `?theme=system` asks for the system, over
+ * any stored choice. */
 export function pickTheme(search: string, stored: string | null): Theme | null {
   const asked = new URLSearchParams(search).get("theme");
+  if (asked === "system") return null;
   if (isTheme(asked)) return asked;
   return isTheme(stored) ? stored : null;
 }
@@ -58,6 +62,18 @@ export function saveTheme(theme: Theme) {
     localStorage.setItem(THEME_KEY, theme);
   } catch {
     // Not remembered by this browser; the URL still has it.
+  }
+}
+
+/** Back to the system: no theme in the URL, none remembered. */
+export function forgetTheme() {
+  const url = new URL(location.href);
+  url.searchParams.delete("theme");
+  history.replaceState(history.state, "", url);
+  try {
+    localStorage.removeItem(THEME_KEY);
+  } catch {
+    // Nothing was remembered where storage is blocked.
   }
 }
 

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
 import {
+  AppHeader,
   Button,
   ChoiceGroup,
   Heatmap,
   Ladder,
+  PageShell,
   Panel,
   signalTokensChanged,
   StatBar,
@@ -22,7 +24,7 @@ import { strings, type Lang } from "./i18n";
 import { SPEEDS, transport, type Speed } from "./transport";
 import { useRowHeight } from "./ui/density";
 import { Fps, Rolling } from "./ui/perf";
-import { applyTheme, pickTheme, saveTheme, storedTheme, useSystemTheme, type Theme } from "./ui/prefs";
+import { applyTheme, forgetTheme, pickTheme, saveTheme, storedTheme, useSystemTheme, type Theme, type ThemeChoice } from "./ui/prefs";
 import { clampTime, clock, parseAt, stepOrigin } from "./ui/time";
 
 const DEPTH = 12;
@@ -62,8 +64,8 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   const text = strings[lang];
   const format = useStoaFormat();
   const [state, send] = useMachine(transport);
-  // None until the viewer picks one: the page follows the system, and the
-  // switch shows the system's scheme.
+  // None until the viewer picks Light or Dark: the page follows the
+  // system, and the switch shows System.
   const [theme, setTheme] = useState<Theme | null>(() => pickTheme(location.search, storedTheme()));
   const systemTheme = useSystemTheme();
   // Stoa's canvases watch data-theme on <html> and redraw in the new
@@ -105,6 +107,12 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     document.fonts.addEventListener("loadingdone", redraw);
     return () => document.fonts.removeEventListener("loadingdone", redraw);
   }, []);
+  // Following the system, a change of the system's scheme changes the
+  // tokens without touching data-theme, so the canvases are asked to draw
+  // again.
+  useEffect(() => {
+    if (theme === null && root.current) signalTokensChanged(root.current);
+  }, [systemTheme, theme]);
   const status = useRef<HTMLDivElement>(null);
   const ladder = useRef<LadderHandle>(null);
   const heatmap = useRef<HeatmapHandle>(null);
@@ -299,154 +307,174 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     </>
   );
 
+  const header = (
+    <AppHeader
+      title={text.title}
+      subtitle={text.onIex(symbol)}
+      actions={
+        <>
+          <ChoiceGroup<ThemeChoice>
+            size="small"
+            label={text.theme}
+            value={theme ?? "system"}
+            onChange={(next) => {
+              if (next === "system") {
+                forgetTheme();
+                setTheme(null);
+              } else {
+                saveTheme(next);
+                setTheme(next);
+              }
+            }}
+            choices={[
+              { id: "system", label: text.system },
+              { id: "light", label: text.light },
+              { id: "dark", label: text.dark },
+            ]}
+          />
+          <ChoiceGroup<Lang>
+            size="small"
+            label={text.language}
+            value={lang}
+            onChange={onLang}
+            // The same EN / AR pair as the themis-steps demo; each code is
+            // named in English, the language it is written in.
+            choices={[
+              { id: "en", label: <span lang="en">EN</span> },
+              { id: "ar", label: <span lang="en">AR</span> },
+            ]}
+          />
+        </>
+      }
+    />
+  );
+
   return (
     <div className="app" ref={root}>
-      <header className="bar">
-        <h1>{text.title}</h1>
-        <span className="muted">{text.onIex(symbol)}</span>
-        <span className="spacer" />
-        <span className="muted">
-          {text.attribution}
-          <a href={IEX_TERMS}>{text.terms}</a>
-          {text.attributionEnd}
-        </span>
-        <ChoiceGroup<Theme>
-          size="small"
-          label={text.theme}
-          value={theme ?? systemTheme}
-          onChange={(next) => {
-            saveTheme(next);
-            setTheme(next);
-          }}
-          choices={[
-            { id: "light", label: text.light },
-            { id: "dark", label: text.dark },
-          ]}
-        />
-        <ChoiceGroup<Lang>
-          size="small"
-          label={text.language}
-          value={lang}
-          onChange={onLang}
-          // The same EN / AR pair as the themis-steps demo; each code is
-          // named in English, the language it is written in.
-          choices={[
-            { id: "en", label: <span lang="en">EN</span> },
-            { id: "ar", label: <span lang="en">AR</span> },
-          ]}
-        />
-      </header>
-      {(loading || failed) && (
-        <main className="load">
-          <Panel title={text.capture(symbol)}>
-            {/* One polite status for the whole load: a message per stage,
-                not per byte. It stays mounted across a retry. */}
-            <div role="status" ref={status} tabIndex={-1} className="load-status">
-              {loading && (
-                <StatusBadge tone="neutral">
-                  {stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol)}
-                </StatusBadge>
-              )}
-            </div>
-            {failed && (
-              <div role="alert" className="load-failure">
-                <StatusBadge tone="negative">
-                  {state.context.error?.during === "playback" ? text.replayStopped(symbol) : text.loadFailed(symbol)}
-                </StatusBadge>
-                {reason && (
-                  <p className="muted">
-                    {reason.kind === "http" && text.httpFailed(format.integer(reason.status))}
-                    {reason.kind === "stopped" && (
-                      <>
-                        {text.engineStopped}
-                        {reason.detail && <> {detail(reason.detail)}</>}
-                      </>
-                    )}
-                    {reason.kind === "unreadable" && text.unreadable}
-                    {reason.kind === "engine" && detail(reason.detail)}
-                  </p>
+      <PageShell
+        header={header}
+        // The data source's terms, at the foot of the page: small print
+        // with no fill of its own, out of the header's way.
+        footer={
+          <>
+            {text.attribution}
+            <a href={IEX_TERMS}>{text.terms}</a>
+            {text.attributionEnd}
+          </>
+        }
+      >
+        {(loading || failed) && (
+          <div className="load">
+            <Panel title={text.capture(symbol)}>
+              {/* One polite status for the whole load: a message per stage,
+                  not per byte. It stays mounted across a retry. */}
+              <div role="status" ref={status} tabIndex={-1} className="load-status">
+                {loading && (
+                  <StatusBadge tone="neutral">
+                    {stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol)}
+                  </StatusBadge>
                 )}
               </div>
-            )}
-            {failed && <Button onPress={retry}>{text.retry}</Button>}
-          </Panel>
-        </main>
-      )}
-      {loaded && !failed && (
-        <main className="grid" data-state={String(state.value)} data-speed={speed}>
-          {/* The controls come first, under the header, so that nothing above
-              them changes height while the views below fill up. */}
-          <Panel title={text.playback} className="transport">
-            <div className="transport-row">
-              <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
-                {playing ? text.pause : text.play}
-              </Button>
-              <ChoiceGroup<Speed>
-                label={text.speed}
-                value={speed}
-                onChange={(s) => send({ type: "SPEED", speed: s })}
-                choices={SPEEDS.map((s) => ({ id: s, label: text.speedChoice(format.integer(s)) }))}
+              {failed && (
+                <div role="alert" className="load-failure">
+                  <StatusBadge tone="negative">
+                    {state.context.error?.during === "playback" ? text.replayStopped(symbol) : text.loadFailed(symbol)}
+                  </StatusBadge>
+                  {reason && (
+                    <p className="muted">
+                      {reason.kind === "http" && text.httpFailed(format.integer(reason.status))}
+                      {reason.kind === "stopped" && (
+                        <>
+                          {text.engineStopped}
+                          {reason.detail && <> {detail(reason.detail)}</>}
+                        </>
+                      )}
+                      {reason.kind === "unreadable" && text.unreadable}
+                      {reason.kind === "engine" && detail(reason.detail)}
+                    </p>
+                  )}
+                </div>
+              )}
+              {failed && <Button onPress={retry}>{text.retry}</Button>}
+            </Panel>
+          </div>
+        )}
+        {loaded && !failed && (
+          <div className="grid" data-state={String(state.value)} data-speed={speed}>
+            {/* The controls come first, under the header, so that nothing above
+                them changes height while the views below fill up. */}
+            <Panel title={text.playback} className="transport">
+              <div className="transport-row">
+                <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
+                  {playing ? text.pause : text.play}
+                </Button>
+                <ChoiceGroup<Speed>
+                  label={text.speed}
+                  value={speed}
+                  onChange={(s) => send({ type: "SPEED", speed: s })}
+                  choices={SPEEDS.map((s) => ({ id: s, label: text.speedChoice(format.integer(s)) }))}
+                />
+                <TimeSlider
+                  label={text.time}
+                  // Steps of a second from the clock, not from the first
+                  // message: the label is the clock, and a key moves it by
+                  // exactly a second. The minimum is up to a second before
+                  // the first message; a seek there goes to the first message.
+                  min={stepOrigin(scrub, SCRUB_STEP_NS)}
+                  max={loaded.duration}
+                  step={SCRUB_STEP_NS}
+                  value={scrub}
+                  onChange={(v) => {
+                    if (v === shownScrub.current) return;
+                    t.current = clampTime(v, loaded.duration);
+                    shownScrub.current = wholeNs(t.current);
+                    setScrub(shownScrub.current);
+                    send({ type: "SEEK" });
+                  }}
+                  format={(v) => format.digits(clock(loaded.startEpochMs, v))}
+                />
+              </div>
+            </Panel>
+            <Panel title={text.performance} className="hud">
+              <StatBar
+                label={text.counters}
+                items={[
+                  { label: text.fps, value: n(hud.fps) },
+                  { label: text.frameP95, value: text.ms(n(hud.frameP95, 1)) },
+                  { label: text.bookP95, value: text.ms(n(hud.seekP95, 2)) },
+                  { label: text.heatmapP95, value: text.ms(n(hud.heatmapP95, 2)) },
+                  { label: text.messagesPerSecond, value: n(hud.msgsPerSec) },
+                  { label: text.orders, value: n(hud.orders) },
+                  { label: text.day, value: text.dayValue(n(loaded.messages), n(loaded.bytes / 1e6, 1), n(loaded.loadMs)) },
+                ]}
               />
-              <TimeSlider
-                label={text.time}
-                // Steps of a second from the clock, not from the first
-                // message: the label is the clock, and a key moves it by
-                // exactly a second. The minimum is up to a second before
-                // the first message; a seek there goes to the first message.
-                min={stepOrigin(scrub, SCRUB_STEP_NS)}
-                max={loaded.duration}
-                step={SCRUB_STEP_NS}
-                value={scrub}
-                onChange={(v) => {
-                  if (v === shownScrub.current) return;
-                  t.current = clampTime(v, loaded.duration);
-                  shownScrub.current = wholeNs(t.current);
-                  setScrub(shownScrub.current);
-                  send({ type: "SEEK" });
-                }}
-                format={(v) => format.digits(clock(loaded.startEpochMs, v))}
+            </Panel>
+            <Panel title={text.book} className="book">
+              <Ladder ref={ladder} depth={DEPTH} label={text.bookLabel(symbol, n(DEPTH))} />
+            </Panel>
+            <Panel title={text.liquidity} className="heat">
+              <Heatmap
+                ref={heatmap}
+                data={heatRange ? undefined : null}
+                // As tall as the ladder beside it: DEPTH rows a side at the
+                // density's row height. The version redraws it at a new
+                // height while paused.
+                height={DEPTH * 2 * rowHeight}
+                tokensVersion={rowHeight}
+                label={text.liquidityLabel}
+                description={
+                  heatRange
+                    ? text.liquidityText(n(heatRange.top, 2), n(heatRange.bottom, 2), n(HEATMAP.window / HEATMAP.columns / 1e9, 1))
+                    : undefined
+                }
               />
-            </div>
-          </Panel>
-          <Panel title={text.performance} className="hud">
-            <StatBar
-              label={text.counters}
-              items={[
-                { label: text.fps, value: n(hud.fps) },
-                { label: text.frameP95, value: text.ms(n(hud.frameP95, 1)) },
-                { label: text.bookP95, value: text.ms(n(hud.seekP95, 2)) },
-                { label: text.heatmapP95, value: text.ms(n(hud.heatmapP95, 2)) },
-                { label: text.messagesPerSecond, value: n(hud.msgsPerSec) },
-                { label: text.orders, value: n(hud.orders) },
-                { label: text.day, value: text.dayValue(n(loaded.messages), n(loaded.bytes / 1e6, 1), n(loaded.loadMs)) },
-              ]}
-            />
-          </Panel>
-          <Panel title={text.book} className="book">
-            <Ladder ref={ladder} depth={DEPTH} label={text.bookLabel(symbol, n(DEPTH))} />
-          </Panel>
-          <Panel title={text.liquidity} className="heat">
-            <Heatmap
-              ref={heatmap}
-              data={heatRange ? undefined : null}
-              // As tall as the ladder beside it: DEPTH rows a side at the
-              // density's row height. The version redraws it at a new
-              // height while paused.
-              height={DEPTH * 2 * rowHeight}
-              tokensVersion={rowHeight}
-              label={text.liquidityLabel}
-              description={
-                heatRange
-                  ? text.liquidityText(n(heatRange.top, 2), n(heatRange.bottom, 2), n(HEATMAP.window / HEATMAP.columns / 1e9, 1))
-                  : undefined
-              }
-            />
-          </Panel>
-          <Panel title={text.trades} className="trades">
-            <TradeTable caption={text.tradesCaption(symbol)} trades={tape} />
-          </Panel>
-        </main>
-      )}
+            </Panel>
+            <Panel title={text.trades} className="trades">
+              <TradeTable caption={text.tradesCaption(symbol)} trades={tape} />
+            </Panel>
+          </div>
+        )}
+      </PageShell>
     </div>
   );
 }
