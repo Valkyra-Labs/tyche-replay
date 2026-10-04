@@ -562,3 +562,12 @@ test.describe("on a phone", () => {
     expect(small).toEqual([]);
   });
 });
+
+test("the IEX terms sit in a footer with no fill, not in the header", async ({ page }) => {
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}`);
+  const footer = page.getByRole("contentinfo");
+  await expect(footer).toContainText("IEX Historical Data");
+  await expect(footer.getByRole("link")).toBeVisible();
+  await expect(footer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.getByRole("banner")).not.toContainText("IEX Historical Data");
+});

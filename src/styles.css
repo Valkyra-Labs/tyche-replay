@@ -21,6 +21,8 @@
 }
 body { margin: 0; }
 .muted { color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-2xs); }
+.foot { padding: var(--stoa-space-2) var(--stoa-space-4) var(--stoa-space-4); color: var(--stoa-color-text-muted); font-size: var(--stoa-font-size-sm); background: transparent; }
+.foot a { color: inherit; }
 .load { padding: var(--stoa-space-3); }
 .load .stoa-panel { display: flex; flex-direction: column; align-items: flex-start; gap: var(--stoa-space-2); }
 .load .stoa-panel__title { margin: 0; }

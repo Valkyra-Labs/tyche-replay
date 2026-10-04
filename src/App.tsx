@@ -305,13 +305,6 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       <AppHeader
         title={text.title}
         subtitle={text.onIex(symbol)}
-        note={
-          <>
-            {text.attribution}
-            <a href={IEX_TERMS}>{text.terms}</a>
-            {text.attributionEnd}
-          </>
-        }
         actions={
           <>
             <ChoiceGroup<Theme>
@@ -453,6 +446,13 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           </Panel>
         </main>
       )}
+      {/* The data source's terms, at the foot of the page: small print
+          with no fill of its own, out of the header's way. */}
+      <footer className="foot">
+        {text.attribution}
+        <a href={IEX_TERMS}>{text.terms}</a>
+        {text.attributionEnd}
+      </footer>
     </div>
   );
 }
