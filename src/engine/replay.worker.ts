@@ -20,7 +20,15 @@ async function load(url: string): Promise<Uint8Array<ArrayBuffer>> {
   post({ kind: "progress", stage: "downloading" });
   const res = await fetch(url);
   if (!res.ok) throw new HttpStatus(res.status);
-  const bytes = await download(res, MAX_CAPTURE_BYTES, () => {});
+  // A message per percent at most (or per 256 KB without a total), not
+  // per chunk.
+  let shown = -Infinity;
+  const bytes = await download(res, MAX_CAPTURE_BYTES, (loaded, total) => {
+    const step = total ? total / 100 : 256 * 1024;
+    if (loaded - shown < step && loaded !== total) return;
+    shown = loaded;
+    post({ kind: "progress", stage: "downloading", loaded, total });
+  });
   post({ kind: "progress", stage: "decoding" });
   // Captures ship gzipped (.tycz).
   return inflate(bytes, MAX_CAPTURE_BYTES);

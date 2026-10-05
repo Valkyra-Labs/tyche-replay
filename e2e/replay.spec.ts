@@ -219,6 +219,8 @@ test("while the capture downloads, a status says so", async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   const panel = page.getByRole("region", { name: "AAPL capture" });
   await expect(panel.getByRole("status")).toContainText("Downloading the AAPL capture…");
+  // A bar shows how far the download is; the status says the stage once.
+  await expect(panel.getByRole("progressbar", { name: "Downloading the AAPL capture…" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
   release();
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();

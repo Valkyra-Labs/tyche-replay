@@ -8,6 +8,7 @@ import {
   Ladder,
   PageShell,
   Panel,
+  ProgressBar,
   signalTokensChanged,
   StatBar,
   StatusBadge,
@@ -15,6 +16,7 @@ import {
   TradeTable,
   useShortcuts,
   useStoaFormat,
+  VisuallyHidden,
   type HeatmapHandle,
   type LadderHandle,
   type Trade,
@@ -75,6 +77,8 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   useLayoutEffect(() => applyTheme(theme), [theme]);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [stage, setStage] = useState<LoadStage>("downloading");
+  // Bytes downloaded so far and the total, when the server says it.
+  const [received, setReceived] = useState<{ loaded: number; total: number | null }>({ loaded: 0, total: null });
   // Each retry loads the capture again in a new worker.
   const [attempt, setAttempt] = useState(0);
   // The prices of the heatmap's top and bottom rows, for its text
@@ -140,6 +144,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     trades.current = [];
     setTape([]);
     setStage("downloading");
+    setReceived({ loaded: 0, total: null });
     setHeatRange(null);
     const w = new Worker(new URL("./engine/replay.worker.ts", import.meta.url), { type: "module" });
     worker.current = w;
@@ -161,6 +166,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       const m = e.data;
       if (m.kind === "progress") {
         setStage(m.stage);
+        if (m.loaded !== undefined) setReceived({ loaded: m.loaded, total: m.total ?? null });
       } else if (m.kind === "loaded") {
         t.current = clampTime(at, m.duration);
         shownScrub.current = wholeNs(t.current);
@@ -370,10 +376,22 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           <div className="load">
             <Panel title={text.capture(symbol)}>
               {/* One polite status for the whole load: a message per stage,
-                  not per byte. It stays mounted across a retry. */}
+                  not per byte. It stays mounted across a retry. The bar
+                  beside it shows the bytes, without announcing each. */}
               <div role="status" ref={status} tabIndex={-1} className="load-status">
-                {loading && <StatusBadge tone="neutral">{stageText}</StatusBadge>}
+                {loading && <VisuallyHidden>{stageText}</VisuallyHidden>}
               </div>
+              {loading && (
+                <ProgressBar
+                  label={stageText}
+                  value={received.loaded}
+                  maxValue={received.total ?? undefined}
+                  // Inflating and indexing report no progress; nor does a
+                  // download whose size the server does not give.
+                  isIndeterminate={stage === "decoding" || received.total === null}
+                  formatValue={(bytes) => text.megabytes(n(bytes / 1e6, 1))}
+                />
+              )}
               {failed && (
                 <div role="alert" className="load-failure">
                   <StatusBadge tone="negative">

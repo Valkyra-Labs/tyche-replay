@@ -27,7 +27,9 @@ export type FailureReason =
 export type LoadStage = "downloading" | "decoding";
 
 export type FromWorker =
-  | { kind: "progress"; stage: LoadStage }
+  /** While downloading, the bytes so far and the total (null when the
+   * server does not say). */
+  | { kind: "progress"; stage: LoadStage; loaded?: number; total?: number | null }
   | { kind: "loaded"; duration: number; startEpochMs: number; messages: number; loadMs: number; bytes: number }
   | { kind: "error"; reason: FailureReason }
   | {
