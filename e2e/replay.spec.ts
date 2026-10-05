@@ -553,8 +553,10 @@ test.describe("the language", () => {
     await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء");
     await expect(page.locator(".stoa-heatmap figcaption")).toContainText("الأسعار من");
     const arabic = await pageText(page);
+    // In English on purpose: the switch's codes and IEX's own attribution.
     const english = arabic.filter((t) => t.english).map((t) => t.text);
-    expect(english).toEqual(["EN", "AR"]);
+    expect(english.slice(0, 2)).toEqual(["EN", "AR"]);
+    expect(english.slice(2).join(" ").replace(/ \./g, ".")).toBe(ATTRIBUTION);
     const left = arabic.filter((t) => !t.english).flatMap((t) => latinIn(t.text).map((w) => `${t.where}: ${w} in "${t.text}"`));
     expect(left).toEqual([]);
 
@@ -562,7 +564,10 @@ test.describe("the language", () => {
     await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
     await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid");
     const en = await pageText(page);
-    expect(en.map((t) => t.where).sort()).toEqual(arabic.map((t) => t.where).sort());
+    // Arabic adds one thing: the translation beside IEX's English text.
+    const translated = arabic.filter((t) => !t.text.startsWith("البيانات مقدَّمة مجانًا من IEX."));
+    expect(translated.length).toBe(arabic.length - 1);
+    expect(en.map((t) => t.where).sort()).toEqual(translated.map((t) => t.where).sort());
   });
 
   // Needs no capture: the request for it is answered with a 404 here.
@@ -667,14 +672,32 @@ test("?data= loads only from this site's data folder", { tag: "@no-capture" }, a
   }
 });
 
+// The attribution IEX asks for, word for word, with its two links.
+const ATTRIBUTION =
+  "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.";
+
 // Needs no capture: the footer is there whether the day loads or not.
 test("the IEX terms sit in a footer with no fill, not in the header", { tag: "@no-capture" }, async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}`);
   const footer = page.getByRole("contentinfo");
-  await expect(footer).toContainText("IEX Historical Data");
-  await expect(footer.getByRole("link")).toBeVisible();
+  await expect(footer).toHaveText(ATTRIBUTION);
+  await expect(footer.getByRole("link", { name: "IEX", exact: true })).toHaveAttribute("href", "https://iextrading.com/trading/market-data/");
+  await expect(footer.getByRole("link", { name: "IEX Historical Data Terms of Use" })).toHaveAttribute("href", "https://www.iex.io/legal/hist-data-terms");
   await expect(footer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(page.getByRole("banner")).not.toContainText("IEX Historical Data");
+});
+
+// Needs no capture, as above.
+test("in Arabic the attribution is IEX's English text, with a translation beside it", { tag: "@no-capture" }, async ({ page }) => {
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&lang=ar`);
+  const footer = page.getByRole("contentinfo");
+  const english = footer.locator('[lang="en"]');
+  await expect(english).toHaveText(ATTRIBUTION);
+  await expect(english).toHaveAttribute("dir", "ltr");
+  await expect(english.getByRole("link", { name: "IEX", exact: true })).toHaveAttribute("href", "https://iextrading.com/trading/market-data/");
+  await expect(english.getByRole("link", { name: "IEX Historical Data Terms of Use" })).toHaveAttribute("href", "https://www.iex.io/legal/hist-data-terms");
+  await expect(footer).toContainText("البيانات مقدَّمة مجانًا من IEX.");
+  expect(await seriousViolations(page)).toEqual([]);
 });
 
 test("the header stays at the top and the page scrolls under it, with Stoa's scrollbars", async ({ page }) => {

@@ -61,7 +61,17 @@ function params() {
   };
 }
 
+// IEX's Historical Data Terms of Use (s.01) ask whoever provides access to
+// the data to cite IEX with this text and these links, word for word: the
+// page shows it in English in every language.
+const IEX_SOURCE = "https://iextrading.com/trading/market-data/";
 const IEX_TERMS = "https://www.iex.io/legal/hist-data-terms";
+const ATTRIBUTION = (
+  <>
+    Data provided for free by <a href={IEX_SOURCE}>IEX</a>. By accessing or using IEX Historical Data, you agree to the{" "}
+    <a href={IEX_TERMS}>IEX Historical Data Terms of Use</a>.
+  </>
+);
 
 /** The replay. Rendered inside an I18nProvider set to the language's
  * locale, which Stoa's words and digits follow. */
@@ -376,12 +386,14 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       <PageShell
         header={header}
         // The data source's terms, at the foot of the page: small print
-        // with no fill of its own, out of the header's way.
+        // with no fill of its own, out of the header's way. IEX's English
+        // text, and in another language its translation beside it.
         footer={
           <>
-            {text.attribution}
-            <a href={IEX_TERMS}>{text.terms}</a>
-            {text.attributionEnd}
+            <p lang="en" dir="ltr" className="attribution">
+              {ATTRIBUTION}
+            </p>
+            {lang !== "en" && <p className="attribution attribution-translation">{text.attribution}</p>}
           </>
         }
       >

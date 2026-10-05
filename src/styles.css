@@ -25,6 +25,11 @@ body { margin: 0; }
 .load .stoa-panel__title { margin: 0; }
 .load-status:focus { outline: none; }
 .load-failure p { margin: var(--stoa-space-1) 0 0; }
+.attribution { margin: 0; }
+/* IEX's English text keeps its own direction, and lines up with the
+   page's: on the right in Arabic, above its translation. */
+[dir="rtl"] .attribution[dir="ltr"] { text-align: end; }
+.attribution + .attribution { margin-block-start: var(--stoa-space-1); }
 .grid {
   display: grid; gap: var(--stoa-space-3);
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(260px, 340px);

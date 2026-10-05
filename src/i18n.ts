@@ -11,9 +11,10 @@ export const LOCALES: Record<Lang, string> = { en: "en-US", ar: "ar-u-nu-arab" }
 const en = {
   title: "Tyche Replay",
   onIex: (symbol: string) => `${symbol} on IEX`,
-  attribution: "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the ",
-  terms: "IEX Historical Data Terms of Use",
-  attributionEnd: ".",
+  /** IEX's attribution in this language. The page always shows IEX's
+   * own English text (see ATTRIBUTION in App.tsx); a translation that
+   * differs from it is shown beside it. */
+  attribution: "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.",
   theme: "Theme",
   system: "System",
   light: "Light",
@@ -71,9 +72,7 @@ export type Strings = typeof en;
 const ar: Strings = {
   title: "تايكي ريبلاي",
   onIex: (symbol) => `${symbol} في بورصة IEX`,
-  attribution: "البيانات مقدَّمة مجانًا من IEX. باستخدامك بيانات IEX التاريخية أو الوصول إليها، فإنك توافق على ",
-  terms: "شروط استخدام بيانات IEX التاريخية",
-  attributionEnd: ".",
+  attribution: "البيانات مقدَّمة مجانًا من IEX. باستخدامك بيانات IEX التاريخية أو الوصول إليها، فإنك توافق على شروط استخدام بيانات IEX التاريخية.",
   theme: "المظهر",
   system: "النظام",
   light: "فاتح",

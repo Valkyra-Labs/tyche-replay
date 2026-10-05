@@ -105,9 +105,12 @@ loading error, not the replay a visitor sees.
 
 ## Data
 
-Data provided for free by IEX. By accessing or using IEX Historical Data,
-you agree to the IEX Historical Data Terms of Use
-(https://www.iex.io/legal/hist-data-terms).
+Data provided for free by [IEX](https://iextrading.com/trading/market-data/).
+By accessing or using IEX Historical Data, you agree to the
+[IEX Historical Data Terms of Use](https://www.iex.io/legal/hist-data-terms).
+
+The page shows this text in English in every language, with "IEX" and
+the terms linked as IEX asks; in Arabic its translation stands beside it.
 
 ## License
 
