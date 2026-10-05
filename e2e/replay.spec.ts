@@ -512,6 +512,20 @@ test.describe("the theme", () => {
     await expect(page.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
   });
 
+  // Needs no capture: only the root element's style is read.
+  test("a chosen theme sets the browser's own colour scheme too", { tag: "@no-capture" }, async ({ page }) => {
+    const scheme = () => page.locator("html").evaluate((el) => getComputedStyle(el).colorScheme);
+    await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+    // The system is dark here; Light chosen makes native parts light.
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=light`);
+    expect(await scheme()).toBe("light");
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=dark`);
+    expect(await scheme()).toBe("dark");
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=system`);
+    expect(await scheme()).toBe("light");
+  });
+
   test("?theme= wins over the remembered choice", async ({ page }) => {
     await open(page);
     await page.getByRole("radio", { name: "Light" }).click();
