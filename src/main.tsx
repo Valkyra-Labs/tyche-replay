@@ -5,10 +5,12 @@ import "@valkyra-labs/stoa-tokens/tokens.css";
 import "./styles.css";
 import { App } from "./App";
 import { LOCALES, type Lang } from "./i18n";
+import { preloadArabicFaces } from "./ui/fonts";
 import { applyLang, pickLang, saveLang } from "./ui/prefs";
 
 // The theme and the language are on <html> already: public/first-paint.js
 // sets them before the body is parsed.
+preloadArabicFaces();
 
 /** The language, kept in ?lang=. The provider sets the locale for Stoa and
  * React Aria together: without one they take the browser's, and would

@@ -698,6 +698,19 @@ test("language, direction and theme are set before the body is parsed", { tag: "
   expect(await atBody("&theme=system")).toEqual({ lang: "en", dir: "ltr", theme: null });
 });
 
+// Needs no capture: only the document's head is read.
+test("an Arabic page preloads its Arabic faces, an English one does not", { tag: "@no-capture" }, async ({ page }) => {
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  const preloads = () =>
+    page.locator('link[rel="preload"][as="font"]').evaluateAll((links) => links.map((l) => [l.getAttribute("href")!.replace(/.*\//, "").replace(/-[\w-]{8}\.woff2$/, ".woff2"), (l as HTMLLinkElement).crossOrigin]));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  const arabic = (await preloads()).map(([name, cors]) => `${name.replace(/\?.*/, "")} ${cors}`);
+  expect(arabic.some((f) => f.startsWith("ibm-plex-sans-arabic-arabic-400-normal"))).toBe(true);
+  expect(arabic.every((f) => f.endsWith(" anonymous"))).toBe(true);
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=en`);
+  expect(await preloads()).toEqual([]);
+});
+
 // Needs no capture: it is answered with a gzip bomb, 257 MiB of zeros in
 // about 260 KB, one MiB past the page's limit.
 test("a capture that inflates past the size limit is refused, in the page's language", { tag: "@no-capture" }, async ({ page }) => {
