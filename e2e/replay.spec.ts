@@ -2,6 +2,7 @@
 // the chosen speed, the controls work with a real mouse and keyboard, and
 // axe finds no serious accessibility violations. All but the tests tagged
 // @no-capture need the day's capture in public/data/ (see the README).
+import { gzipSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
@@ -593,6 +594,19 @@ test.describe("on a phone", () => {
     });
     expect(small).toEqual([]);
   });
+});
+
+// Needs no capture: it is answered with a gzip bomb, 257 MiB of zeros in
+// about 260 KB, one MiB past the page's limit.
+test("a capture that inflates past the size limit is refused, in the page's language", { tag: "@no-capture" }, async ({ page }) => {
+  const bomb = gzipSync(Buffer.alloc(257 * 2 ** 20));
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 200, body: bomb, contentType: "application/octet-stream" }));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("The AAPL capture is larger than this page can replay.");
+  await expect(alert).toContainText("capture_too_large");
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  await expect(page.getByRole("alert")).toContainText("تسجيل AAPL أكبر مما تستطيع هذه الصفحة إعادة عرضه.");
 });
 
 // Needs no capture: the request for the default one is answered with a 404.

@@ -21,7 +21,10 @@ design system. Everything runs in the browser; there is no server.
 Status: early. Performance record (load, frame rate and worker cost
 under a named load, with stamps): [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 While a capture loads the page says so; a failure says why, with a
-retry; before the first message the views say they are empty.
+retry; before the first message the views say they are empty. A capture
+over 256 MiB, as downloaded or once inflated, or past the engine's
+limits on messages and book depth, is refused with that reason rather
+than filling the tab's memory.
 
 The playback controls and the performance counters sit under the
 header, so they stay put while the views below fill up. The header has

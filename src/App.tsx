@@ -146,6 +146,9 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     const fail = (reason: FailureReason) => {
       setLoaded(null);
       send({ type: "FAILED", reason });
+      // A worker that failed may hold a capture's worth of memory; Retry
+      // starts a new one.
+      w.terminate();
     };
     // A worker that cannot start (its module or the WebAssembly fails to
     // load) or crashes says so here, not with an error message.
@@ -291,6 +294,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     send({ type: "RETRY" });
   };
 
+  const stageText = stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol);
   const n = (v: number, digits = 0) => (digits === 0 ? format.integer(v) : format.decimal(v, digits));
   const reason = state.context.error?.reason;
   // The engine's own words (and the browser's) are English: a detail,
@@ -368,11 +372,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
               {/* One polite status for the whole load: a message per stage,
                   not per byte. It stays mounted across a retry. */}
               <div role="status" ref={status} tabIndex={-1} className="load-status">
-                {loading && (
-                  <StatusBadge tone="neutral">
-                    {stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol)}
-                  </StatusBadge>
-                )}
+                {loading && <StatusBadge tone="neutral">{stageText}</StatusBadge>}
               </div>
               {failed && (
                 <div role="alert" className="load-failure">
@@ -389,6 +389,16 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                         </>
                       )}
                       {reason.kind === "unreadable" && text.unreadable}
+                      {reason.kind === "limit" && (
+                        <>
+                          {reason.code === "capture_too_large"
+                            ? text.tooLarge(symbol)
+                            : reason.code === "too_many_messages"
+                              ? text.tooManyMessages(symbol)
+                              : text.bookTooDeep(symbol)}{" "}
+                          {detail(reason.detail)}
+                        </>
+                      )}
                       {reason.kind === "engine" && detail(reason.detail)}
                     </p>
                   )}
