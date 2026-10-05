@@ -379,7 +379,13 @@ test("the heatmap is as tall as the book at every density", async ({ page }) => 
   await open(page);
   const height = (selector: string) => page.locator(selector).evaluate((el) => el.getBoundingClientRect().height);
   const ladder = () => height(".stoa-ladder__canvas");
-  const heatmap = () => height(".stoa-heatmap__canvas");
+  // The heatmap's height on screen, once its bitmap has been redrawn at
+  // that height (paused, nothing else redraws it); 0 while it is stale.
+  const heatmap = () =>
+    page.locator(".stoa-heatmap__canvas").evaluate((c: HTMLCanvasElement) => {
+      const box = c.getBoundingClientRect().height;
+      return c.height === Math.round(box * devicePixelRatio) ? box : 0;
+    });
   // Regular density by default: 28 px rows, 12 levels a side.
   await expect.poll(ladder).toBe(28 * 24);
   await expect.poll(heatmap).toBe(28 * 24);

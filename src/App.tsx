@@ -510,7 +510,9 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                 data={heatRange ? undefined : null}
                 // As tall as the ladder beside it: DEPTH rows a side at the
                 // density's row height. The version redraws it at a new
-                // height while paused.
+                // height while paused: Stoa refits a canvas whose box
+                // changed only when its width no longer matches its
+                // bitmap, so a new height alone would stay stretched.
                 height={DEPTH * 2 * rowHeight}
                 tokensVersion={rowHeight}
                 label={text.liquidityLabel}
