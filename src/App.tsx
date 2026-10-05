@@ -20,6 +20,7 @@ import {
   type Trade,
 } from "@valkyra-labs/stoa-react";
 import { HEATMAP } from "./engine/heatmap";
+import { captureUrl } from "./engine/source";
 import type { FailureReason, FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/protocol";
 import { strings, type Lang } from "./i18n";
 import { SPEEDS, transport, type Speed } from "./transport";
@@ -51,7 +52,7 @@ function params() {
   const q = new URLSearchParams(location.search);
   return {
     symbol: q.get("symbol") ?? "AAPL",
-    data: q.get("data") ?? `${import.meta.env.BASE_URL}data/20260924_AAPL_deepplus.tycz`,
+    data: captureUrl(q.get("data"), import.meta.env.BASE_URL, location.href),
     at: parseAt(q.get("at")),
   };
 }

@@ -54,8 +54,9 @@ pnpm test && pnpm e2e
 The app loads AAPL from `public/data/20260924_AAPL_deepplus.tycz` by
 default (produce it with `tyche extract --symbols AAPL -o
 20260924_AAPL_deepplus.tyc`, see tyche-market, and gzip it to `.tycz`);
-`?symbol=SPY&data=URL&at=NS` overrides the symbol, the capture and the
-start time; `?theme=light|dark` and `?lang=en|ar` set the theme and the
+`?symbol=SPY&data=PATH&at=NS` overrides the symbol, the capture and the
+start time (the capture only from this site's own `data/` folder: a
+path elsewhere, or another site's address, loads the default instead); `?theme=light|dark` and `?lang=en|ar` set the theme and the
 language (the switches keep them there, and the theme in localStorage
 too). The unit tests check the heatmap against the engine on the same
 AAPL capture, so `pnpm test` needs it too.

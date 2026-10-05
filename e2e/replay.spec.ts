@@ -595,6 +595,23 @@ test.describe("on a phone", () => {
   });
 });
 
+// Needs no capture: the request for the default one is answered with a 404.
+test("?data= loads only from this site's data folder", { tag: "@no-capture" }, async ({ page, baseURL }) => {
+  const asked: string[] = [];
+  page.on("request", (r) => asked.push(r.url()));
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  // A worker's requests go through the page's routes too; anything that
+  // leaves this origin is answered here, never by the network.
+  await page.route((url) => url.origin !== new URL(baseURL!).origin, (route) => route.fulfill({ status: 200, body: "" }));
+  for (const data of ["http://127.0.0.1:5205/data/x.tycz", "data:application/octet-stream;base64,VFlDSEVDQVA=", "/src/main.tsx"]) {
+    asked.length = 0;
+    await page.goto(`/?symbol=AAPL&data=${encodeURIComponent(data)}`);
+    await expect(page.getByRole("alert")).toContainText("The server answered with status 404.");
+    expect(asked.filter((u) => !u.startsWith(baseURL!)), data).toEqual([]);
+    expect(asked.some((u) => u.endsWith(CAPTURE)), data).toBe(true);
+  }
+});
+
 // Needs no capture: the footer is there whether the day loads or not.
 test("the IEX terms sit in a footer with no fill, not in the header", { tag: "@no-capture" }, async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}`);
