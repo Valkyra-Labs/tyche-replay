@@ -18,6 +18,12 @@ async function open(page: Page, at: number | string = TEN_AM) {
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
 }
 
+// Stoa's Ladder updates its text at most every 5 s, counted from the
+// page's start, so the first book can stay "The book is empty." in the
+// text until 5 s after the page began loading: a wait from the moment
+// the replay shows must be longer than that.
+const BOOK_TEXT = { timeout: 10_000 };
+
 async function seriousViolations(page: Page) {
   const results = await new AxeBuilder({ page }).analyze();
   return results.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => `${v.id}: ${v.nodes.length} node(s)`);
@@ -269,7 +275,7 @@ test("in Arabic the heatmap's time runs right to left, and its text says so", as
 
 test("the book is described in text for screen readers", async ({ page }) => {
   await open(page);
-  await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/);
+  await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/, BOOK_TEXT);
 });
 
 test("no serious or critical axe violations", async ({ page }) => {
@@ -309,7 +315,7 @@ test("a failed load says why, and Retry loads it", async ({ page }) => {
   // The Retry button is gone; focus moves on to Play rather than the page.
   await expect(page.getByRole("button", { name: "Play" })).toBeFocused();
   await expect(alert).toHaveCount(0);
-  await expect(page.locator(".stoa-ladder figcaption")).toContainText(/best bid/);
+  await expect(page.locator(".stoa-ladder figcaption")).toContainText(/best bid/, BOOK_TEXT);
 });
 
 test("a worker that cannot start is reported, and Retry starts a new one", async ({ page }) => {
@@ -368,7 +374,7 @@ test.describe("on a Russian browser", () => {
 
   test("prices and sizes keep the English format", async ({ page }) => {
     await open(page);
-    await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask \d+\.\d\d for [\d,]+/);
+    await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask \d+\.\d\d for [\d,]+/, BOOK_TEXT);
     const prices = page.locator(".trades tbody td.stoa-num");
     await expect(prices.first()).toHaveText(/^[\d,]+(\.\d\d)?$/);
     for (const text of await prices.allTextContents()) expect(text).toMatch(/^[\d,]+(\.\d\d)?$/);
@@ -601,7 +607,7 @@ test.describe("the language", () => {
     await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=ar`);
     await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
     // The ladder's text follows a while after the first draw.
-    await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء");
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء", BOOK_TEXT);
     await expect(page.locator(".stoa-heatmap figcaption")).toContainText("الأسعار من");
     const arabic = await pageText(page);
     // In English on purpose: the switch's codes and IEX's own attribution.
@@ -613,7 +619,7 @@ test.describe("the language", () => {
 
     await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=en`);
     await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
-    await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid");
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid", BOOK_TEXT);
     const en = await pageText(page);
     // Arabic adds one thing: the translation beside IEX's English text.
     const translated = arabic.filter((t) => !t.text.startsWith("البيانات مقدَّمة مجانًا من IEX."));
