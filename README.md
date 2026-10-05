@@ -95,9 +95,13 @@ own output and stops, publishing nothing, when a value cannot be read.
 - Unit tests (no capture): Vitest tests passed in `pnpm test:no-capture`,
   every unit test but the heatmap's, which replays the AAPL capture.
 - e2e (no capture): Playwright tests passed in Chromium against `vite
-  preview` of the build, only those tagged `@no-capture` (a failed load
-  explained in Arabic, with an axe check; the IEX terms in the footer).
-  The rest replay the AAPL day and run locally with the capture.
+  preview` of the build, only those tagged `@no-capture`: a failed load
+  explained in Arabic, with an axe check; captures refused for their
+  size, a gzip bomb and a book deeper than the engine accepts; `?data=`
+  kept to the site's data folder; IEX's attribution and its links in
+  English and Arabic; language, direction and theme set before the
+  body; the Arabic faces preloaded; the colour scheme of a chosen
+  theme. The rest replay the AAPL day and run locally with the capture.
 - Bundle gzip: every JavaScript and CSS file in `dist/`, gzip level 9,
   summed. The engine's WebAssembly and the fonts are not included.
 
