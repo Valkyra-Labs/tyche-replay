@@ -6,6 +6,7 @@ import {
   ChoiceGroup,
   Heatmap,
   Ladder,
+  Ltr,
   PageShell,
   Panel,
   ProgressBar,
@@ -324,13 +325,10 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   const n = (v: number, digits = 0) => (digits === 0 ? format.integer(v) : format.decimal(v, digits));
   const reason = state.context.error?.reason;
   // The engine's own words (and the browser's) are English: a detail,
-  // marked as such for the page's language.
+  // marked as such and kept left to right in an Arabic sentence.
   const detail = (message: string) => (
     <>
-      {text.details}{" "}
-      <span lang="en" dir="ltr">
-        {message}
-      </span>
+      {text.details} <Ltr lang="en">{message}</Ltr>
     </>
   );
 

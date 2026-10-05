@@ -334,7 +334,8 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("The AAPL replay stopped.");
-  await expect(alert).toContainText("seek failed");
+  // The engine's words are English, isolated left to right in any page.
+  await expect(alert.locator('bdi[dir="ltr"][lang="en"]')).toHaveText("seek failed");
   await expect(alert).not.toContainText("Could not load");
   broken = false;
   await page.getByRole("button", { name: "Retry" }).click();
