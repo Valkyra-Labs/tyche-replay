@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import react from "@vitejs/plugin-react";
 
 // Served from GitHub Pages under /tyche-replay/.
@@ -10,5 +10,18 @@ export default defineConfig({
   // React and fail with "Invalid hook call".
   resolve: { dedupe: ["react", "react-dom", "react-aria-components"] },
   worker: { format: "es" },
-  server: { fs: { allow: [".."] } },
+  server: {
+    // What the dev server may serve beyond this project: the linked Stoa
+    // packages and their dependencies, and the engine's build. Not the
+    // whole parent folder, which would hand the other repositories' files
+    // (ignored ones included) to anything that can reach the server.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        "../stoa-system/packages",
+        "../stoa-system/node_modules",
+        "../tyche-market/pkg",
+      ],
+    },
+  },
 });
