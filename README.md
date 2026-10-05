@@ -28,8 +28,10 @@ than filling the tab's memory.
 
 The playback controls and the performance counters sit under the
 header, so they stay put while the views below fill up. The header has
-a light and dark theme switch (it follows the system until one is
-picked) and an English and Arabic language switch; Arabic is right to
+a Shortcuts button (or press `?`) that lists the keyboard shortcuts
+(the space bar plays and pauses), a light and dark theme switch (it
+follows the system until one is picked) and an English and Arabic
+language switch; Arabic is right to
 left, with Arabic-Indic digits in the book, the heatmap, the trades and
 the clock.
 

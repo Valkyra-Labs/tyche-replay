@@ -9,6 +9,8 @@ import {
   PageShell,
   Panel,
   ProgressBar,
+  groupShortcuts,
+  ShortcutsDialog,
   signalTokensChanged,
   StatBar,
   StatusBadge,
@@ -288,8 +290,16 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   // Space plays and pauses wherever focus is, except in a text field and on
   // a control that handles the key itself (a button presses, a choice
   // selects). Focus on the page's main region, where a click in the content
-  // puts it, counts as nowhere.
-  useShortcuts([{ key: " ", description: playing ? text.pause : text.play, onTrigger: toggle }]);
+  // puts it, counts as nowhere. "?" lists the shortcuts. Neither runs while
+  // that list is open over the page.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const help = useShortcuts(
+    [
+      { key: " ", description: text.playOrPause, group: text.playback, onTrigger: toggle, isDisabled: !loaded },
+      { key: "?", description: text.showShortcuts, group: text.playback, onTrigger: () => setHelpOpen(true) },
+    ],
+    { enabled: !helpOpen },
+  );
 
   const loading = state.matches("loading");
   const failed = state.matches("failed");
@@ -320,6 +330,9 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       subtitle={text.onIex(symbol)}
       actions={
         <>
+          <Button size="small" variant="ghost" shortcut={{ key: "?" }} onPress={() => setHelpOpen(true)}>
+            {text.shortcuts}
+          </Button>
           <ChoiceGroup<ThemeChoice>
             size="small"
             label={text.theme}
@@ -432,7 +445,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                 them changes height while the views below fill up. */}
             <Panel title={text.playback} className="transport">
               <div className="transport-row">
-                <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
+                <Button autoFocus={focusPlay} variant="primary" shortcut={{ key: " " }} onPress={toggle}>
                   {playing ? text.pause : text.play}
                 </Button>
                 <ChoiceGroup<Speed>
@@ -508,6 +521,12 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           </div>
         )}
       </PageShell>
+      <ShortcutsDialog
+        isOpen={helpOpen}
+        onOpenChange={setHelpOpen}
+        title={text.shortcutsTitle}
+        groups={groupShortcuts(help, text.otherShortcuts)}
+      />
     </div>
   );
 }

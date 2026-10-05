@@ -68,6 +68,41 @@ test("the space bar still toggles playback after a click in the page", async ({ 
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
+test("? and the header's Shortcuts button list the keyboard shortcuts", async ({ page }) => {
+  await open(page);
+  // Play says which key does the same.
+  await expect(page.getByRole("button", { name: "Play" })).toHaveAttribute("aria-keyshortcuts", "Space");
+  await page.keyboard.press("?");
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(dialog).toBeVisible();
+  const playback = dialog.getByRole("region", { name: "Playback" });
+  await expect(playback.getByRole("term")).toHaveText(["Space", "?"]);
+  await expect(playback.getByRole("definition")).toHaveText(["Play or pause", "Show keyboard shortcuts"]);
+  // The space bar does not play behind the dialog.
+  await page.keyboard.press("Space");
+  await expect(page.locator(".grid")).toHaveAttribute("data-state", "paused");
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  expect(await seriousViolations(page)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  const button = page.getByRole("banner").getByRole("button", { name: "Shortcuts" });
+  await expect(button).toHaveAttribute("aria-keyshortcuts", "?");
+  await button.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(button).toBeFocused();
+});
+
+test("the shortcuts are listed in Arabic", async ({ page }) => {
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
+  await page.getByRole("banner").getByRole("button", { name: "الاختصارات" }).click();
+  const dialog = page.getByRole("dialog", { name: "اختصارات لوحة المفاتيح" });
+  await expect(dialog.getByRole("region", { name: "التشغيل" }).getByRole("term")).toHaveText(["مسافة", "?"]);
+  const left = (await dialog.allInnerTexts()).flatMap((t) => latinIn(t));
+  expect(left).toEqual([]);
+});
+
 test("the slider shows the clock as it is, and a key moves it by a second", async ({ page }) => {
   await open(page);
   const output = page.locator(".stoa-slider__output");
