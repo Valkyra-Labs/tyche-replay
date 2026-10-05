@@ -13,6 +13,7 @@ import {
   StatusBadge,
   TimeSlider,
   TradeTable,
+  useShortcuts,
   useStoaFormat,
   type HeatmapHandle,
   type LadderHandle,
@@ -274,16 +275,11 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     send({ type: "TOGGLE" });
   }, [send]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Space" && (e.target === document.body || e.target === document.documentElement)) {
-        e.preventDefault();
-        toggle();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [toggle]);
+  // Space plays and pauses wherever focus is, except in a text field and on
+  // a control that handles the key itself (a button presses, a choice
+  // selects). Focus on the page's main region, where a click in the content
+  // puts it, counts as nowhere.
+  useShortcuts([{ key: " ", description: playing ? text.pause : text.play, onTrigger: toggle }]);
 
   const loading = state.matches("loading");
   const failed = state.matches("failed");
