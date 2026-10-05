@@ -745,6 +745,37 @@ test("a capture that inflates past the size limit is refused, in the page's lang
   await expect(page.getByRole("alert")).toContainText("تسجيل AAPL أكبر مما تستطيع هذه الصفحة إعادة عرضه.");
 });
 
+/** A DEEP+ capture for AAPL of `orders` orders added at one price and
+ * never removed: a book deeper than the engine accepts. */
+function deepBook(orders: number): Buffer {
+  const head = Buffer.alloc(16);
+  head.write("TYCHECAP", 0, "latin1");
+  head.writeUInt16LE(1, 8);
+  head.writeUInt16LE(0x8005, 10);
+  const records = Array.from({ length: orders }, (_, i) => {
+    const m = Buffer.alloc(40);
+    m.writeUInt16LE(38, 0);
+    m.write("a8", 2, "latin1");
+    m.writeBigInt64LE(1_758_700_000_000_000_000n + BigInt(i), 4);
+    m.write("AAPL    ", 12, "latin1");
+    m.writeBigInt64LE(BigInt(i + 1), 20);
+    m.writeUInt32LE(100, 28);
+    m.writeBigInt64LE(2_500_000n, 32);
+    return m;
+  });
+  return Buffer.concat([head, ...records]);
+}
+
+// Needs no capture: it is answered with a made-up one. Needs the engine
+// with its size limits (tyche-market's Limits).
+test("a capture the engine refuses as too deep is explained", { tag: "@no-capture" }, async ({ page }) => {
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 200, body: deepBook(12_000), contentType: "application/octet-stream" }));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("The AAPL book in this capture is deeper than this page can replay.");
+  await expect(alert.locator('bdi[lang="en"]')).toHaveText(/^too_many_orders: /);
+});
+
 // Needs no capture: the request for the default one is answered with a 404.
 test("?data= loads only from this site's data folder", { tag: "@no-capture" }, async ({ page, baseURL }) => {
   const asked: string[] = [];
