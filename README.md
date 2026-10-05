@@ -74,7 +74,9 @@ pnpm test && pnpm e2e
 
 `pnpm e2e` drives the dev server on 5174 and reuses one already running
 there; `E2E_PORT` moves it to another port, and `E2E_PREVIEW=1` tests
-the production build (after `pnpm build`) through `vite preview`.
+the production build (after `pnpm build`) through `vite preview`: every
+test but one, which reads what the app last drew from a hook that only
+a development build sets, and is skipped there.
 Without a capture, `pnpm test:no-capture` runs the unit tests but the
 heatmap's, and `pnpm e2e:no-capture` the e2e tests tagged `@no-capture`;
 that is what CI runs.

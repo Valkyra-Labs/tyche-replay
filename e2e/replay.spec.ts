@@ -9,6 +9,9 @@ import AxeBuilder from "@axe-core/playwright";
 // 10:00 ET is this many ns after AAPL's first message of the day.
 const TEN_AM = 10_335_395_000_000;
 const CAPTURE = "/data/20260924_AAPL_deepplus.tycz";
+// The replay worker's script: replay.worker.ts?worker_file... from the dev
+// server, assets/replay.worker-<hash>.js from a build.
+const WORKER = "**/replay.worker*";
 
 async function open(page: Page, at: number | string = TEN_AM) {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${at}`);
@@ -136,6 +139,7 @@ test("the heatmap is drawn while paused, right after the load", async ({ page })
 });
 
 test("the heatmap draws the cells the engine sent, the newest column the book now", async ({ page }) => {
+  test.skip(!!process.env.E2E_PREVIEW, "reads window.__tycheViews, which only a development build sets");
   // 10:06: bids and asks both inside the 80 rows (see src/engine/heatmap.test.ts).
   const at = TEN_AM + 360e9;
   await open(page, at);
@@ -280,7 +284,7 @@ test("a failed load says why, and Retry loads it", async ({ page }) => {
 
 test("a worker that cannot start is reported, and Retry starts a new one", async ({ page }) => {
   let broken = true;
-  await page.route("**/replay.worker.ts*", (route) => (broken ? route.fulfill({ status: 500, body: "" }) : route.continue()));
+  await page.route(WORKER, (route) => (broken ? route.fulfill({ status: 500, body: "" }) : route.continue()));
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   await expect(page.getByRole("alert")).toContainText("The replay engine stopped.");
   broken = false;
@@ -294,7 +298,7 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
     ? { kind: "loaded", duration: 60e9, startEpochMs: 0, messages: 0, loadMs: 0, bytes: 0 }
     : { kind: "error", reason: { kind: "engine", detail: "seek failed" } });`;
   let broken = true;
-  await page.route("**/replay.worker.ts*", (route) =>
+  await page.route(WORKER, (route) =>
     broken ? route.fulfill({ status: 200, contentType: "text/javascript", body: failing }) : route.continue(),
   );
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
@@ -349,8 +353,6 @@ test("the heatmap is as tall as the book at every density", async ({ page }) => 
   await expect.poll(ladder).toBe(28 * 24);
   await expect.poll(heatmap).toBe(28 * 24);
   // A density set on an ancestor, announced with Stoa's token signal.
-  // (On <html> itself, compact is outranked by the :root default in
-  // Stoa's tokens.css, so this goes through <body>.)
   for (const [density, row] of [["compact", 24], ["comfortable", 36], ["regular", 28]] as const) {
     await page.evaluate((d) => {
       document.body.dataset.density = d;
