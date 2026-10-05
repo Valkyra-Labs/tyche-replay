@@ -312,6 +312,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           <ChoiceGroup<ThemeChoice>
             size="small"
             label={text.theme}
+            hideLabel
             value={theme ?? "system"}
             onChange={(next) => {
               if (next === "system") {
@@ -331,6 +332,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           <ChoiceGroup<Lang>
             size="small"
             label={text.language}
+            hideLabel
             value={lang}
             onChange={onLang}
             // The same EN / AR pair as the themis-steps demo; each code is
@@ -406,12 +408,14 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                 </Button>
                 <ChoiceGroup<Speed>
                   label={text.speed}
+                  hideLabel
                   value={speed}
                   onChange={(s) => send({ type: "SPEED", speed: s })}
                   choices={SPEEDS.map((s) => ({ id: s, label: text.speedChoice(format.integer(s)) }))}
                 />
                 <TimeSlider
                   label={text.time}
+                  hideLabel
                   // Steps of a second from the clock, not from the first
                   // message: the label is the clock, and a key moves it by
                   // exactly a second. The minimum is up to a second before
