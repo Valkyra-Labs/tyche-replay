@@ -37,7 +37,8 @@ the clock.
 
 The liquidity heatmap shows the last ten minutes in 240 columns of
 2.5 s, each the displayed book at the end of its slice, the newest at
-the clock; its 80 rows are prices a cent apart around the current
+the clock (at the right, and at the left in Arabic, where time runs
+right to left as on the time slider); its 80 rows are prices a cent apart around the current
 midpoint, the same prices for every column. Bids are drawn in the bid
 colour and asks in the ask colour. When the spread is wider than the
 80 cents (as at 10:00:00 on the AAPL day), the newest column is empty

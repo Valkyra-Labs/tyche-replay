@@ -60,8 +60,10 @@ const en = {
   bookLabel: (symbol: string, depth: string) => `Order book for ${symbol}, ${depth} levels per side`,
   liquidity: "Liquidity, last 10 minutes",
   liquidityLabel: "Displayed liquidity over the last 10 minutes",
+  // The heatmap runs in the reading direction, as the time slider does:
+  // the newest column is at the right in English, at the left in Arabic.
   liquidityText: (top: string, bottom: string, column: string) =>
-    `Prices from ${top} at the top to ${bottom} at the bottom, a cent a row, around the midpoint now. Time runs left to right, ${column} seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`,
+    `Prices from ${top} at the top to ${bottom} at the bottom, a cent a row, around the midpoint now. Time runs left to right, ${column} seconds a column, ending now at the right. In each column bids lie below asks; darker cells hold more shares.`,
   trades: "Trades",
   tradesCaption: (symbol: string) => `Recent trades in ${symbol}`,
   noTrades: "No trades in the last minute.",
@@ -119,7 +121,7 @@ const ar: Strings = {
   liquidity: "السيولة، آخر ١٠ دقائق",
   liquidityLabel: "السيولة المعروضة خلال آخر ١٠ دقائق",
   liquidityText: (top, bottom, column) =>
-    `الأسعار من ${top} في الأعلى إلى ${bottom} في الأسفل، سنت واحد لكل صف، حول السعر الأوسط الآن. يجري الوقت من اليسار إلى اليمين، ${column} ثانية لكل عمود، وينتهي الآن. في كل عمود تقع أوامر الشراء تحت أوامر البيع؛ والخلايا الأغمق تحمل أسهمًا أكثر.`,
+    `الأسعار من ${top} في الأعلى إلى ${bottom} في الأسفل، سنت واحد لكل صف، حول السعر الأوسط الآن. يجري الوقت من اليمين إلى اليسار، ${column} ثانية لكل عمود، وينتهي الآن عند اليسار. في كل عمود تقع أوامر الشراء تحت أوامر البيع؛ والخلايا الأغمق تحمل أسهمًا أكثر.`,
   trades: "الصفقات",
   tradesCaption: (symbol) => `أحدث الصفقات في ${symbol}`,
   noTrades: "لا صفقات في آخر دقيقة.",

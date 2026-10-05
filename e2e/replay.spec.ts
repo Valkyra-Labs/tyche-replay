@@ -237,6 +237,36 @@ test("the heatmap draws the cells the engine sent, the newest column the book no
   await expect(page.locator(".stoa-heatmap figcaption")).toContainText(`Prices from ${top} at the top to ${bottom} at the bottom`);
 });
 
+test("in Arabic the heatmap's time runs right to left, and its text says so", async ({ page }) => {
+  test.skip(!!process.env.E2E_PREVIEW, "reads window.__tycheViews, which only a development build sets");
+  const at = TEN_AM + 360e9;
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${at}&lang=ar`);
+  await expect.poll(() => page.evaluate(() => window.__tycheViews?.heatmapTime)).toBe(at);
+  await expect(page.locator(".stoa-heatmap figcaption")).toContainText("يجري الوقت من اليمين إلى اليسار");
+  // The newest column's filled cells are drawn at the left edge.
+  const drawn = await page.evaluate(() => {
+    const h = window.__tycheViews!.heatmap!;
+    const canvas = document.querySelector<HTMLCanvasElement>(".stoa-heatmap__canvas")!;
+    const { width, height } = canvas;
+    const img = canvas.getContext("2d")!.getImageData(0, 0, width, height).data;
+    const blank = Array.from(img.slice(0, 3));
+    const cw = width / h.columns;
+    const rh = height / h.rows;
+    const newest = Array.from(h.cells).slice((h.columns - 1) * h.rows);
+    const seen: boolean[] = [];
+    newest.forEach((v, r) => {
+      const y = Math.floor((r + 0.5) * rh);
+      // The price plates sit in the left corners in Arabic.
+      if (v === 0 || y < 30 * devicePixelRatio || y > height - 30 * devicePixelRatio) return;
+      const i = (y * width + Math.floor(cw / 2)) * 4;
+      seen.push([0, 1, 2].some((k) => Math.abs(img[i + k]! - blank[k]!) > 1));
+    });
+    return seen;
+  });
+  expect(drawn.length).toBeGreaterThan(0);
+  expect(drawn.every(Boolean)).toBe(true);
+});
+
 test("the book is described in text for screen readers", async ({ page }) => {
   await open(page);
   await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/);
