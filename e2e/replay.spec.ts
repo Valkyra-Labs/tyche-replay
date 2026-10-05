@@ -672,6 +672,32 @@ test.describe("on a phone", () => {
   });
 });
 
+// Needs no capture: only the document's first moments are read.
+test("language, direction and theme are set before the body is parsed", { tag: "@no-capture" }, async ({ page }) => {
+  // Records <html>'s attributes when <body> starts, before anything can be
+  // painted: an Arabic page must not lay out left to right first, nor a
+  // dark one paint light.
+  await page.addInitScript(() => {
+    new MutationObserver((_, observer) => {
+      if (!document.body) return;
+      const html = document.documentElement;
+      (window as unknown as { atBody: unknown }).atBody = { lang: html.lang, dir: html.dir, theme: html.dataset.theme ?? null };
+      observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  const atBody = async (query: string) => {
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}${query}`);
+    return page.evaluate(() => (window as unknown as { atBody: unknown }).atBody);
+  };
+  expect(await atBody("&lang=ar&theme=dark")).toEqual({ lang: "ar", dir: "rtl", theme: "dark" });
+  expect(await atBody("")).toEqual({ lang: "en", dir: "ltr", theme: null });
+  // A theme this browser remembers counts too, unless ?theme=system.
+  await page.evaluate(() => localStorage.setItem("tyche-replay:theme", "light"));
+  expect(await atBody("&lang=ar")).toEqual({ lang: "ar", dir: "rtl", theme: "light" });
+  expect(await atBody("&theme=system")).toEqual({ lang: "en", dir: "ltr", theme: null });
+});
+
 // Needs no capture: it is answered with a gzip bomb, 257 MiB of zeros in
 // about 260 KB, one MiB past the page's limit.
 test("a capture that inflates past the size limit is refused, in the page's language", { tag: "@no-capture" }, async ({ page }) => {
