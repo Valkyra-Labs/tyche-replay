@@ -58,6 +58,7 @@ const en = {
     `Prices from ${top} at the top to ${bottom} at the bottom, a cent a row, around the midpoint now. Time runs left to right, ${column} seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`,
   trades: "Trades",
   tradesCaption: (symbol: string) => `Recent trades in ${symbol}`,
+  noTrades: "No trades in the last minute.",
 };
 
 export type Strings = typeof en;
@@ -112,6 +113,7 @@ const ar: Strings = {
     `الأسعار من ${top} في الأعلى إلى ${bottom} في الأسفل، سنت واحد لكل صف، حول السعر الأوسط الآن. يجري الوقت من اليسار إلى اليمين، ${column} ثانية لكل عمود، وينتهي الآن. في كل عمود تقع أوامر الشراء تحت أوامر البيع؛ والخلايا الأغمق تحمل أسهمًا أكثر.`,
   trades: "الصفقات",
   tradesCaption: (symbol) => `أحدث الصفقات في ${symbol}`,
+  noTrades: "لا صفقات في آخر دقيقة.",
 };
 
 export const strings: Record<Lang, Strings> = { en, ar };

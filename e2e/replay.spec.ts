@@ -276,7 +276,7 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
 test("before the first trade, the views show their empty states", async ({ page }) => {
   // The first message of the day: no orders and no trades yet.
   await open(page, 0);
-  await expect(page.locator(".trades tbody")).toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText("No liquidity to show.");
   await expect(page.locator(".stoa-ladder figcaption")).toHaveText("The book is empty.");
   expect(await seriousViolations(page)).toEqual([]);
@@ -285,11 +285,11 @@ test("before the first trade, the views show their empty states", async ({ page 
 test("seeking back to the start empties the trades and the heatmap again", async ({ page }) => {
   await open(page);
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText(/^Prices from \d+\.\d\d at the top/);
-  await expect(page.locator(".trades tbody tr").first()).not.toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody tr").first()).not.toHaveText("No trades in the last minute.");
   const slider = page.getByRole("slider", { name: "Time" });
   await slider.focus();
   await slider.press("Home");
-  await expect(page.locator(".trades tbody")).toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText("No liquidity to show.");
 });
 
@@ -340,6 +340,8 @@ test("at the end of the day, Play starts again from the beginning", async ({ pag
   const end = await clockSeconds(page);
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "ended");
+  // The minute before 17:00 had no trades; the day had many.
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "playing");
   await expect.poll(() => clockSeconds(page)).toBeLessThan(end - 3600);

@@ -499,7 +499,11 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
               />
             </Panel>
             <Panel title={text.trades} className="trades">
-              <TradeTable caption={text.tradesCaption(symbol)} trades={tape} />
+              {/* After a jump the tape starts with the minute before the
+                  clock, then keeps the newest trades as they come: when it
+                  is empty, there was none in at least the last minute (at
+                  the end of the day, in a quiet stretch), not none at all. */}
+              <TradeTable caption={text.tradesCaption(symbol)} trades={tape} emptyText={text.noTrades} />
             </Panel>
           </div>
         )}
