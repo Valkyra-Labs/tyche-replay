@@ -52,6 +52,21 @@ test("the space bar toggles playback and the slider seeks from the keyboard", as
   await expect(slider).toHaveAttribute("aria-valuetext", /^\d\d:\d\d:\d\d\.\d{3}$/);
 });
 
+test("the space bar still toggles playback after a click in the page", async ({ page }) => {
+  await open(page);
+  // A click in the content focuses the page's main region, not the body.
+  await page.getByRole("heading", { level: 1 }).click();
+  await page.getByRole("region", { name: "Trades" }).click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+  // On the Play button, Space presses the button once, not twice.
+  await page.getByRole("button", { name: "Play" }).focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+});
+
 test("the slider shows the clock as it is, and a key moves it by a second", async ({ page }) => {
   await open(page);
   const output = page.locator(".stoa-slider__output");
