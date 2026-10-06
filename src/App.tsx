@@ -6,8 +6,12 @@ import {
   ChoiceGroup,
   Heatmap,
   Ladder,
+  Ltr,
   PageShell,
   Panel,
+  ProgressBar,
+  groupShortcuts,
+  ShortcutsDialog,
   signalTokensChanged,
   StatBar,
   StatusBadge,
@@ -15,11 +19,13 @@ import {
   TradeTable,
   useShortcuts,
   useStoaFormat,
+  VisuallyHidden,
   type HeatmapHandle,
   type LadderHandle,
   type Trade,
 } from "@valkyra-labs/stoa-react";
 import { HEATMAP } from "./engine/heatmap";
+import { captureUrl } from "./engine/source";
 import type { FailureReason, FromWorker, HeatmapResult, LoadStage, ToWorker } from "./engine/protocol";
 import { strings, type Lang } from "./i18n";
 import { SPEEDS, transport, type Speed } from "./transport";
@@ -51,12 +57,22 @@ function params() {
   const q = new URLSearchParams(location.search);
   return {
     symbol: q.get("symbol") ?? "AAPL",
-    data: q.get("data") ?? `${import.meta.env.BASE_URL}data/20260924_AAPL_deepplus.tycz`,
+    data: captureUrl(q.get("data"), import.meta.env.BASE_URL, location.href),
     at: parseAt(q.get("at")),
   };
 }
 
+// IEX's Historical Data Terms of Use (s.01) ask whoever provides access to
+// the data to cite IEX with this text and these links, word for word: the
+// page shows it in English in every language.
+const IEX_SOURCE = "https://iextrading.com/trading/market-data/";
 const IEX_TERMS = "https://www.iex.io/legal/hist-data-terms";
+const ATTRIBUTION = (
+  <>
+    Data provided for free by <a href={IEX_SOURCE}>IEX</a>. By accessing or using IEX Historical Data, you agree to the{" "}
+    <a href={IEX_TERMS}>IEX Historical Data Terms of Use</a>.
+  </>
+);
 
 /** The replay. Rendered inside an I18nProvider set to the language's
  * locale, which Stoa's words and digits follow. */
@@ -74,6 +90,8 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   useLayoutEffect(() => applyTheme(theme), [theme]);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [stage, setStage] = useState<LoadStage>("downloading");
+  // Bytes downloaded so far and the total, when the server says it.
+  const [received, setReceived] = useState<{ loaded: number; total: number | null }>({ loaded: 0, total: null });
   // Each retry loads the capture again in a new worker.
   const [attempt, setAttempt] = useState(0);
   // The prices of the heatmap's top and bottom rows, for its text
@@ -139,12 +157,16 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     trades.current = [];
     setTape([]);
     setStage("downloading");
+    setReceived({ loaded: 0, total: null });
     setHeatRange(null);
     const w = new Worker(new URL("./engine/replay.worker.ts", import.meta.url), { type: "module" });
     worker.current = w;
     const fail = (reason: FailureReason) => {
       setLoaded(null);
       send({ type: "FAILED", reason });
+      // A worker that failed may hold a capture's worth of memory; Retry
+      // starts a new one.
+      w.terminate();
     };
     // A worker that cannot start (its module or the WebAssembly fails to
     // load) or crashes says so here, not with an error message.
@@ -157,6 +179,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       const m = e.data;
       if (m.kind === "progress") {
         setStage(m.stage);
+        if (m.loaded !== undefined) setReceived({ loaded: m.loaded, total: m.total ?? null });
       } else if (m.kind === "loaded") {
         t.current = clampTime(at, m.duration);
         shownScrub.current = wholeNs(t.current);
@@ -278,8 +301,16 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
   // Space plays and pauses wherever focus is, except in a text field and on
   // a control that handles the key itself (a button presses, a choice
   // selects). Focus on the page's main region, where a click in the content
-  // puts it, counts as nowhere.
-  useShortcuts([{ key: " ", description: playing ? text.pause : text.play, onTrigger: toggle }]);
+  // puts it, counts as nowhere. "?" lists the shortcuts. Neither runs while
+  // that list is open over the page.
+  const [helpOpen, setHelpOpen] = useState(false);
+  const help = useShortcuts(
+    [
+      { key: " ", description: text.playOrPause, group: text.playback, onTrigger: toggle, isDisabled: !loaded },
+      { key: "?", description: text.showShortcuts, group: text.playback, onTrigger: () => setHelpOpen(true) },
+    ],
+    { enabled: !helpOpen },
+  );
 
   const loading = state.matches("loading");
   const failed = state.matches("failed");
@@ -290,16 +321,14 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
     send({ type: "RETRY" });
   };
 
+  const stageText = stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol);
   const n = (v: number, digits = 0) => (digits === 0 ? format.integer(v) : format.decimal(v, digits));
   const reason = state.context.error?.reason;
   // The engine's own words (and the browser's) are English: a detail,
-  // marked as such for the page's language.
+  // marked as such and kept left to right in an Arabic sentence.
   const detail = (message: string) => (
     <>
-      {text.details}{" "}
-      <span lang="en" dir="ltr">
-        {message}
-      </span>
+      {text.details} <Ltr lang="en">{message}</Ltr>
     </>
   );
 
@@ -309,6 +338,9 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       subtitle={text.onIex(symbol)}
       actions={
         <>
+          <Button size="small" variant="ghost" shortcut={{ key: "?" }} onPress={() => setHelpOpen(true)}>
+            {text.shortcuts}
+          </Button>
           <ChoiceGroup<ThemeChoice>
             size="small"
             label={text.theme}
@@ -352,12 +384,14 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
       <PageShell
         header={header}
         // The data source's terms, at the foot of the page: small print
-        // with no fill of its own, out of the header's way.
+        // with no fill of its own, out of the header's way. IEX's English
+        // text, and in another language its translation beside it.
         footer={
           <>
-            {text.attribution}
-            <a href={IEX_TERMS}>{text.terms}</a>
-            {text.attributionEnd}
+            <p lang="en" dir="ltr" className="attribution">
+              {ATTRIBUTION}
+            </p>
+            {lang !== "en" && <p className="attribution attribution-translation">{text.attribution}</p>}
           </>
         }
       >
@@ -365,14 +399,22 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
           <div className="load">
             <Panel title={text.capture(symbol)}>
               {/* One polite status for the whole load: a message per stage,
-                  not per byte. It stays mounted across a retry. */}
+                  not per byte. It stays mounted across a retry. The bar
+                  beside it shows the bytes, without announcing each. */}
               <div role="status" ref={status} tabIndex={-1} className="load-status">
-                {loading && (
-                  <StatusBadge tone="neutral">
-                    {stage === "downloading" ? text.downloading(symbol) : text.decoding(symbol)}
-                  </StatusBadge>
-                )}
+                {loading && <VisuallyHidden>{stageText}</VisuallyHidden>}
               </div>
+              {loading && (
+                <ProgressBar
+                  label={stageText}
+                  value={received.loaded}
+                  maxValue={received.total ?? undefined}
+                  // Inflating and indexing report no progress; nor does a
+                  // download whose size the server does not give.
+                  isIndeterminate={stage === "decoding" || received.total === null}
+                  formatValue={(bytes) => text.megabytes(n(bytes / 1e6, 1))}
+                />
+              )}
               {failed && (
                 <div role="alert" className="load-failure">
                   <StatusBadge tone="negative">
@@ -388,6 +430,16 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                         </>
                       )}
                       {reason.kind === "unreadable" && text.unreadable}
+                      {reason.kind === "limit" && (
+                        <>
+                          {reason.code === "capture_too_large"
+                            ? text.tooLarge(symbol)
+                            : reason.code === "too_many_messages"
+                              ? text.tooManyMessages(symbol)
+                              : text.bookTooDeep(symbol)}{" "}
+                          {detail(reason.detail)}
+                        </>
+                      )}
                       {reason.kind === "engine" && detail(reason.detail)}
                     </p>
                   )}
@@ -403,7 +455,7 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                 them changes height while the views below fill up. */}
             <Panel title={text.playback} className="transport">
               <div className="transport-row">
-                <Button autoFocus={focusPlay} variant="primary" onPress={toggle}>
+                <Button autoFocus={focusPlay} variant="primary" shortcut={{ key: " " }} onPress={toggle}>
                   {playing ? text.pause : text.play}
                 </Button>
                 <ChoiceGroup<Speed>
@@ -458,7 +510,9 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
                 data={heatRange ? undefined : null}
                 // As tall as the ladder beside it: DEPTH rows a side at the
                 // density's row height. The version redraws it at a new
-                // height while paused.
+                // height while paused: Stoa refits a canvas whose box
+                // changed only when its width no longer matches its
+                // bitmap, so a new height alone would stay stretched.
                 height={DEPTH * 2 * rowHeight}
                 tokensVersion={rowHeight}
                 label={text.liquidityLabel}
@@ -470,11 +524,21 @@ export function App({ lang, onLang }: { lang: Lang; onLang: (lang: Lang) => void
               />
             </Panel>
             <Panel title={text.trades} className="trades">
-              <TradeTable caption={text.tradesCaption(symbol)} trades={tape} />
+              {/* After a jump the tape starts with the minute before the
+                  clock, then keeps the newest trades as they come: when it
+                  is empty, there was none in at least the last minute (at
+                  the end of the day, in a quiet stretch), not none at all. */}
+              <TradeTable caption={text.tradesCaption(symbol)} trades={tape} emptyText={text.noTrades} />
             </Panel>
           </div>
         )}
       </PageShell>
+      <ShortcutsDialog
+        isOpen={helpOpen}
+        onOpenChange={setHelpOpen}
+        title={text.shortcutsTitle}
+        groups={groupShortcuts(help, text.otherShortcuts)}
+      />
     </div>
   );
 }

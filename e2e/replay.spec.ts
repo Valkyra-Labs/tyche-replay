@@ -2,17 +2,27 @@
 // the chosen speed, the controls work with a real mouse and keyboard, and
 // axe finds no serious accessibility violations. All but the tests tagged
 // @no-capture need the day's capture in public/data/ (see the README).
+import { gzipSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 // 10:00 ET is this many ns after AAPL's first message of the day.
 const TEN_AM = 10_335_395_000_000;
 const CAPTURE = "/data/20260924_AAPL_deepplus.tycz";
+// The replay worker's script: replay.worker.ts?worker_file... from the dev
+// server, assets/replay.worker-<hash>.js from a build.
+const WORKER = "**/replay.worker*";
 
 async function open(page: Page, at: number | string = TEN_AM) {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${at}`);
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
 }
+
+// Stoa's Ladder updates its text at most every 5 s, counted from the
+// page's start, so the first book can stay "The book is empty." in the
+// text until 5 s after the page began loading: a wait from the moment
+// the replay shows must be longer than that.
+const BOOK_TEXT = { timeout: 10_000 };
 
 async function seriousViolations(page: Page) {
   const results = await new AxeBuilder({ page }).analyze();
@@ -67,6 +77,41 @@ test("the space bar still toggles playback after a click in the page", async ({ 
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
+test("? and the header's Shortcuts button list the keyboard shortcuts", async ({ page }) => {
+  await open(page);
+  // Play says which key does the same.
+  await expect(page.getByRole("button", { name: "Play" })).toHaveAttribute("aria-keyshortcuts", "Space");
+  await page.keyboard.press("?");
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(dialog).toBeVisible();
+  const playback = dialog.getByRole("region", { name: "Playback" });
+  await expect(playback.getByRole("term")).toHaveText(["Space", "?"]);
+  await expect(playback.getByRole("definition")).toHaveText(["Play or pause", "Show keyboard shortcuts"]);
+  // The space bar does not play behind the dialog.
+  await page.keyboard.press("Space");
+  await expect(page.locator(".grid")).toHaveAttribute("data-state", "paused");
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  expect(await seriousViolations(page)).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  const button = page.getByRole("banner").getByRole("button", { name: "Shortcuts" });
+  await expect(button).toHaveAttribute("aria-keyshortcuts", "?");
+  await button.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(button).toBeFocused();
+});
+
+test("the shortcuts are listed in Arabic", async ({ page }) => {
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
+  await page.getByRole("banner").getByRole("button", { name: "الاختصارات" }).click();
+  const dialog = page.getByRole("dialog", { name: "اختصارات لوحة المفاتيح" });
+  await expect(dialog.getByRole("region", { name: "التشغيل" }).getByRole("term")).toHaveText(["مسافة", "?"]);
+  const left = (await dialog.allInnerTexts()).flatMap((t) => latinIn(t));
+  expect(left).toEqual([]);
+});
+
 test("the slider shows the clock as it is, and a key moves it by a second", async ({ page }) => {
   await open(page);
   const output = page.locator(".stoa-slider__output");
@@ -100,6 +145,7 @@ test("the heatmap is drawn while paused, right after the load", async ({ page })
 });
 
 test("the heatmap draws the cells the engine sent, the newest column the book now", async ({ page }) => {
+  test.skip(!!process.env.E2E_PREVIEW, "reads window.__tycheViews, which only a development build sets");
   // 10:06: bids and asks both inside the 80 rows (see src/engine/heatmap.test.ts).
   const at = TEN_AM + 360e9;
   await open(page, at);
@@ -197,9 +243,39 @@ test("the heatmap draws the cells the engine sent, the newest column the book no
   await expect(page.locator(".stoa-heatmap figcaption")).toContainText(`Prices from ${top} at the top to ${bottom} at the bottom`);
 });
 
+test("in Arabic the heatmap's time runs right to left, and its text says so", async ({ page }) => {
+  test.skip(!!process.env.E2E_PREVIEW, "reads window.__tycheViews, which only a development build sets");
+  const at = TEN_AM + 360e9;
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${at}&lang=ar`);
+  await expect.poll(() => page.evaluate(() => window.__tycheViews?.heatmapTime)).toBe(at);
+  await expect(page.locator(".stoa-heatmap figcaption")).toContainText("يجري الوقت من اليمين إلى اليسار");
+  // The newest column's filled cells are drawn at the left edge.
+  const drawn = await page.evaluate(() => {
+    const h = window.__tycheViews!.heatmap!;
+    const canvas = document.querySelector<HTMLCanvasElement>(".stoa-heatmap__canvas")!;
+    const { width, height } = canvas;
+    const img = canvas.getContext("2d")!.getImageData(0, 0, width, height).data;
+    const blank = Array.from(img.slice(0, 3));
+    const cw = width / h.columns;
+    const rh = height / h.rows;
+    const newest = Array.from(h.cells).slice((h.columns - 1) * h.rows);
+    const seen: boolean[] = [];
+    newest.forEach((v, r) => {
+      const y = Math.floor((r + 0.5) * rh);
+      // The price plates sit in the left corners in Arabic.
+      if (v === 0 || y < 30 * devicePixelRatio || y > height - 30 * devicePixelRatio) return;
+      const i = (y * width + Math.floor(cw / 2)) * 4;
+      seen.push([0, 1, 2].some((k) => Math.abs(img[i + k]! - blank[k]!) > 1));
+    });
+    return seen;
+  });
+  expect(drawn.length).toBeGreaterThan(0);
+  expect(drawn.every(Boolean)).toBe(true);
+});
+
 test("the book is described in text for screen readers", async ({ page }) => {
   await open(page);
-  await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/);
+  await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask/, BOOK_TEXT);
 });
 
 test("no serious or critical axe violations", async ({ page }) => {
@@ -218,6 +294,8 @@ test("while the capture downloads, a status says so", async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   const panel = page.getByRole("region", { name: "AAPL capture" });
   await expect(panel.getByRole("status")).toContainText("Downloading the AAPL capture…");
+  // A bar shows how far the download is; the status says the stage once.
+  await expect(panel.getByRole("progressbar", { name: "Downloading the AAPL capture…" })).toBeVisible();
   expect(await seriousViolations(page)).toEqual([]);
   release();
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
@@ -237,12 +315,12 @@ test("a failed load says why, and Retry loads it", async ({ page }) => {
   // The Retry button is gone; focus moves on to Play rather than the page.
   await expect(page.getByRole("button", { name: "Play" })).toBeFocused();
   await expect(alert).toHaveCount(0);
-  await expect(page.locator(".stoa-ladder figcaption")).toContainText(/best bid/);
+  await expect(page.locator(".stoa-ladder figcaption")).toContainText(/best bid/, BOOK_TEXT);
 });
 
 test("a worker that cannot start is reported, and Retry starts a new one", async ({ page }) => {
   let broken = true;
-  await page.route("**/replay.worker.ts*", (route) => (broken ? route.fulfill({ status: 500, body: "" }) : route.continue()));
+  await page.route(WORKER, (route) => (broken ? route.fulfill({ status: 500, body: "" }) : route.continue()));
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   await expect(page.getByRole("alert")).toContainText("The replay engine stopped.");
   broken = false;
@@ -256,13 +334,14 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
     ? { kind: "loaded", duration: 60e9, startEpochMs: 0, messages: 0, loadMs: 0, bytes: 0 }
     : { kind: "error", reason: { kind: "engine", detail: "seek failed" } });`;
   let broken = true;
-  await page.route("**/replay.worker.ts*", (route) =>
+  await page.route(WORKER, (route) =>
     broken ? route.fulfill({ status: 200, contentType: "text/javascript", body: failing }) : route.continue(),
   );
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("The AAPL replay stopped.");
-  await expect(alert).toContainText("seek failed");
+  // The engine's words are English, isolated left to right in any page.
+  await expect(alert.locator('bdi[dir="ltr"][lang="en"]')).toHaveText("seek failed");
   await expect(alert).not.toContainText("Could not load");
   broken = false;
   await page.getByRole("button", { name: "Retry" }).click();
@@ -273,7 +352,7 @@ test("an engine failure after the load is reported as a stopped replay, and Retr
 test("before the first trade, the views show their empty states", async ({ page }) => {
   // The first message of the day: no orders and no trades yet.
   await open(page, 0);
-  await expect(page.locator(".trades tbody")).toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText("No liquidity to show.");
   await expect(page.locator(".stoa-ladder figcaption")).toHaveText("The book is empty.");
   expect(await seriousViolations(page)).toEqual([]);
@@ -282,11 +361,11 @@ test("before the first trade, the views show their empty states", async ({ page 
 test("seeking back to the start empties the trades and the heatmap again", async ({ page }) => {
   await open(page);
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText(/^Prices from \d+\.\d\d at the top/);
-  await expect(page.locator(".trades tbody tr").first()).not.toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody tr").first()).not.toHaveText("No trades in the last minute.");
   const slider = page.getByRole("slider", { name: "Time" });
   await slider.focus();
   await slider.press("Home");
-  await expect(page.locator(".trades tbody")).toHaveText("No trades yet.");
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await expect(page.locator(".stoa-heatmap figcaption")).toHaveText("No liquidity to show.");
 });
 
@@ -295,7 +374,7 @@ test.describe("on a Russian browser", () => {
 
   test("prices and sizes keep the English format", async ({ page }) => {
     await open(page);
-    await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask \d+\.\d\d for [\d,]+/);
+    await expect(page.locator("figcaption").first()).toContainText(/best bid \d+\.\d\d for [\d,]+, best ask \d+\.\d\d for [\d,]+/, BOOK_TEXT);
     const prices = page.locator(".trades tbody td.stoa-num");
     await expect(prices.first()).toHaveText(/^[\d,]+(\.\d\d)?$/);
     for (const text of await prices.allTextContents()) expect(text).toMatch(/^[\d,]+(\.\d\d)?$/);
@@ -306,13 +385,17 @@ test("the heatmap is as tall as the book at every density", async ({ page }) => 
   await open(page);
   const height = (selector: string) => page.locator(selector).evaluate((el) => el.getBoundingClientRect().height);
   const ladder = () => height(".stoa-ladder__canvas");
-  const heatmap = () => height(".stoa-heatmap__canvas");
+  // The heatmap's height on screen, once its bitmap has been redrawn at
+  // that height (paused, nothing else redraws it); 0 while it is stale.
+  const heatmap = () =>
+    page.locator(".stoa-heatmap__canvas").evaluate((c: HTMLCanvasElement) => {
+      const box = c.getBoundingClientRect().height;
+      return c.height === Math.round(box * devicePixelRatio) ? box : 0;
+    });
   // Regular density by default: 28 px rows, 12 levels a side.
   await expect.poll(ladder).toBe(28 * 24);
   await expect.poll(heatmap).toBe(28 * 24);
   // A density set on an ancestor, announced with Stoa's token signal.
-  // (On <html> itself, compact is outranked by the :root default in
-  // Stoa's tokens.css, so this goes through <body>.)
   for (const [density, row] of [["compact", 24], ["comfortable", 36], ["regular", 28]] as const) {
     await page.evaluate((d) => {
       document.body.dataset.density = d;
@@ -337,6 +420,8 @@ test("at the end of the day, Play starts again from the beginning", async ({ pag
   const end = await clockSeconds(page);
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "ended");
+  // The minute before 17:00 had no trades; the day had many.
+  await expect(page.locator(".trades tbody")).toHaveText("No trades in the last minute.");
   await page.getByRole("button", { name: "Play" }).click();
   await expect(grid).toHaveAttribute("data-state", "playing");
   await expect.poll(() => clockSeconds(page)).toBeLessThan(end - 3600);
@@ -433,6 +518,20 @@ test.describe("the theme", () => {
     await expect(page.getByRole("radio", { name: "System" })).toHaveAttribute("aria-checked", "true");
   });
 
+  // Needs no capture: only the root element's style is read.
+  test("a chosen theme sets the browser's own colour scheme too", { tag: "@no-capture" }, async ({ page }) => {
+    const scheme = () => page.locator("html").evaluate((el) => getComputedStyle(el).colorScheme);
+    await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+    // The system is dark here; Light chosen makes native parts light.
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=light`);
+    expect(await scheme()).toBe("light");
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=dark`);
+    expect(await scheme()).toBe("dark");
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&theme=system`);
+    expect(await scheme()).toBe("light");
+  });
+
   test("?theme= wins over the remembered choice", async ({ page }) => {
     await open(page);
     await page.getByRole("radio", { name: "Light" }).click();
@@ -508,19 +607,24 @@ test.describe("the language", () => {
     await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=ar`);
     await expect(page.getByRole("button", { name: "تشغيل" })).toBeVisible();
     // The ladder's text follows a while after the first draw.
-    await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء");
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("أفضل سعر شراء", BOOK_TEXT);
     await expect(page.locator(".stoa-heatmap figcaption")).toContainText("الأسعار من");
     const arabic = await pageText(page);
+    // In English on purpose: the switch's codes and IEX's own attribution.
     const english = arabic.filter((t) => t.english).map((t) => t.text);
-    expect(english).toEqual(["EN", "AR"]);
+    expect(english.slice(0, 2)).toEqual(["EN", "AR"]);
+    expect(english.slice(2).join(" ").replace(/ \./g, ".")).toBe(ATTRIBUTION);
     const left = arabic.filter((t) => !t.english).flatMap((t) => latinIn(t.text).map((w) => `${t.where}: ${w} in "${t.text}"`));
     expect(left).toEqual([]);
 
     await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM + 360e9}&lang=en`);
     await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
-    await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid");
+    await expect(page.locator(".stoa-ladder figcaption")).toContainText("best bid", BOOK_TEXT);
     const en = await pageText(page);
-    expect(en.map((t) => t.where).sort()).toEqual(arabic.map((t) => t.where).sort());
+    // Arabic adds one thing: the translation beside IEX's English text.
+    const translated = arabic.filter((t) => !t.text.startsWith("البيانات مقدَّمة مجانًا من IEX."));
+    expect(translated.length).toBe(arabic.length - 1);
+    expect(en.map((t) => t.where).sort()).toEqual(translated.map((t) => t.where).sort());
   });
 
   // Needs no capture: the request for it is answered with a 404 here.
@@ -595,14 +699,132 @@ test.describe("on a phone", () => {
   });
 });
 
+// Needs no capture: only the document's first moments are read.
+test("language, direction and theme are set before the body is parsed", { tag: "@no-capture" }, async ({ page }) => {
+  // Records <html>'s attributes when <body> starts, before anything can be
+  // painted: an Arabic page must not lay out left to right first, nor a
+  // dark one paint light.
+  await page.addInitScript(() => {
+    new MutationObserver((_, observer) => {
+      if (!document.body) return;
+      const html = document.documentElement;
+      (window as unknown as { atBody: unknown }).atBody = { lang: html.lang, dir: html.dir, theme: html.dataset.theme ?? null };
+      observer.disconnect();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  const atBody = async (query: string) => {
+    await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}${query}`);
+    return page.evaluate(() => (window as unknown as { atBody: unknown }).atBody);
+  };
+  expect(await atBody("&lang=ar&theme=dark")).toEqual({ lang: "ar", dir: "rtl", theme: "dark" });
+  expect(await atBody("")).toEqual({ lang: "en", dir: "ltr", theme: null });
+  // A theme this browser remembers counts too, unless ?theme=system.
+  await page.evaluate(() => localStorage.setItem("tyche-replay:theme", "light"));
+  expect(await atBody("&lang=ar")).toEqual({ lang: "ar", dir: "rtl", theme: "light" });
+  expect(await atBody("&theme=system")).toEqual({ lang: "en", dir: "ltr", theme: null });
+});
+
+// Needs no capture: only the document's head is read.
+test("an Arabic page preloads its Arabic faces, an English one does not", { tag: "@no-capture" }, async ({ page }) => {
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  const preloads = () =>
+    page.locator('link[rel="preload"][as="font"]').evaluateAll((links) => links.map((l) => [l.getAttribute("href")!.replace(/.*\//, "").replace(/-[\w-]{8}\.woff2$/, ".woff2"), (l as HTMLLinkElement).crossOrigin]));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  const arabic = (await preloads()).map(([name, cors]) => `${name.replace(/\?.*/, "")} ${cors}`);
+  expect(arabic.some((f) => f.startsWith("ibm-plex-sans-arabic-arabic-400-normal"))).toBe(true);
+  expect(arabic.every((f) => f.endsWith(" anonymous"))).toBe(true);
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=en`);
+  expect(await preloads()).toEqual([]);
+});
+
+// Needs no capture: it is answered with a gzip bomb, 257 MiB of zeros in
+// about 260 KB, one MiB past the page's limit.
+test("a capture that inflates past the size limit is refused, in the page's language", { tag: "@no-capture" }, async ({ page }) => {
+  const bomb = gzipSync(Buffer.alloc(257 * 2 ** 20));
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 200, body: bomb, contentType: "application/octet-stream" }));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("The AAPL capture is larger than this page can replay.");
+  await expect(alert).toContainText("capture_too_large");
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}&lang=ar`);
+  await expect(page.getByRole("alert")).toContainText("تسجيل AAPL أكبر مما تستطيع هذه الصفحة إعادة عرضه.");
+});
+
+/** A DEEP+ capture for AAPL of `orders` orders added at one price and
+ * never removed: a book deeper than the engine accepts. */
+function deepBook(orders: number): Buffer {
+  const head = Buffer.alloc(16);
+  head.write("TYCHECAP", 0, "latin1");
+  head.writeUInt16LE(1, 8);
+  head.writeUInt16LE(0x8005, 10);
+  const records = Array.from({ length: orders }, (_, i) => {
+    const m = Buffer.alloc(40);
+    m.writeUInt16LE(38, 0);
+    m.write("a8", 2, "latin1");
+    m.writeBigInt64LE(1_758_700_000_000_000_000n + BigInt(i), 4);
+    m.write("AAPL    ", 12, "latin1");
+    m.writeBigInt64LE(BigInt(i + 1), 20);
+    m.writeUInt32LE(100, 28);
+    m.writeBigInt64LE(2_500_000n, 32);
+    return m;
+  });
+  return Buffer.concat([head, ...records]);
+}
+
+// Needs no capture: it is answered with a made-up one. Needs the engine
+// with its size limits (tyche-market's Limits).
+test("a capture the engine refuses as too deep is explained", { tag: "@no-capture" }, async ({ page }) => {
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 200, body: deepBook(12_000), contentType: "application/octet-stream" }));
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&at=${TEN_AM}`);
+  const alert = page.getByRole("alert");
+  await expect(alert).toContainText("The AAPL book in this capture is deeper than this page can replay.");
+  await expect(alert.locator('bdi[lang="en"]')).toHaveText(/^too_many_orders: /);
+});
+
+// Needs no capture: the request for the default one is answered with a 404.
+test("?data= loads only from this site's data folder", { tag: "@no-capture" }, async ({ page, baseURL }) => {
+  const asked: string[] = [];
+  page.on("request", (r) => asked.push(r.url()));
+  await page.route(`**${CAPTURE}`, (route) => route.fulfill({ status: 404, body: "" }));
+  // A worker's requests go through the page's routes too; anything that
+  // leaves this origin is answered here, never by the network.
+  await page.route((url) => url.origin !== new URL(baseURL!).origin, (route) => route.fulfill({ status: 200, body: "" }));
+  for (const data of ["http://127.0.0.1:5205/data/x.tycz", "data:application/octet-stream;base64,VFlDSEVDQVA=", "/src/main.tsx"]) {
+    asked.length = 0;
+    await page.goto(`/?symbol=AAPL&data=${encodeURIComponent(data)}`);
+    await expect(page.getByRole("alert")).toContainText("The server answered with status 404.");
+    expect(asked.filter((u) => !u.startsWith(baseURL!)), data).toEqual([]);
+    expect(asked.some((u) => u.endsWith(CAPTURE)), data).toBe(true);
+  }
+});
+
+// The attribution IEX asks for, word for word, with its two links.
+const ATTRIBUTION =
+  "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.";
+
 // Needs no capture: the footer is there whether the day loads or not.
 test("the IEX terms sit in a footer with no fill, not in the header", { tag: "@no-capture" }, async ({ page }) => {
   await page.goto(`/?symbol=AAPL&data=${CAPTURE}`);
   const footer = page.getByRole("contentinfo");
-  await expect(footer).toContainText("IEX Historical Data");
-  await expect(footer.getByRole("link")).toBeVisible();
+  await expect(footer).toHaveText(ATTRIBUTION);
+  await expect(footer.getByRole("link", { name: "IEX", exact: true })).toHaveAttribute("href", "https://iextrading.com/trading/market-data/");
+  await expect(footer.getByRole("link", { name: "IEX Historical Data Terms of Use" })).toHaveAttribute("href", "https://www.iex.io/legal/hist-data-terms");
   await expect(footer).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(page.getByRole("banner")).not.toContainText("IEX Historical Data");
+});
+
+// Needs no capture, as above.
+test("in Arabic the attribution is IEX's English text, with a translation beside it", { tag: "@no-capture" }, async ({ page }) => {
+  await page.goto(`/?symbol=AAPL&data=${CAPTURE}&lang=ar`);
+  const footer = page.getByRole("contentinfo");
+  const english = footer.locator('[lang="en"]');
+  await expect(english).toHaveText(ATTRIBUTION);
+  await expect(english).toHaveAttribute("dir", "ltr");
+  await expect(english.getByRole("link", { name: "IEX", exact: true })).toHaveAttribute("href", "https://iextrading.com/trading/market-data/");
+  await expect(english.getByRole("link", { name: "IEX Historical Data Terms of Use" })).toHaveAttribute("href", "https://www.iex.io/legal/hist-data-terms");
+  await expect(footer).toContainText("البيانات مقدَّمة مجانًا من IEX.");
+  expect(await seriousViolations(page)).toEqual([]);
 });
 
 test("the header stays at the top and the page scrolls under it, with Stoa's scrollbars", async ({ page }) => {

@@ -13,7 +13,6 @@
 @import "@valkyra-labs/stoa-react/styles.css";
 
 :root {
-  color-scheme: light dark;
   font-family: var(--stoa-font-family-sans);
   font-size: var(--stoa-density-font-size);
   background: var(--stoa-color-bg);
@@ -25,6 +24,11 @@ body { margin: 0; }
 .load .stoa-panel__title { margin: 0; }
 .load-status:focus { outline: none; }
 .load-failure p { margin: var(--stoa-space-1) 0 0; }
+.attribution { margin: 0; }
+/* IEX's English text keeps its own direction, and lines up with the
+   page's: on the right in Arabic, above its translation. */
+[dir="rtl"] .attribution[dir="ltr"] { text-align: end; }
+.attribution + .attribution { margin-block-start: var(--stoa-space-1); }
 .grid {
   display: grid; gap: var(--stoa-space-3);
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(260px, 340px);
@@ -37,5 +41,5 @@ body { margin: 0; }
   .grid { grid-template-columns: 1fr; grid-template-areas: "transport" "hud" "book" "heat" "trades"; }
   /* On a phone, 11px text (Stoa's 2xs: the notes and the counters) is
      too small to read; 12px is the floor. */
-  .muted, .stoa-statbar { font-size: var(--stoa-font-size-xs); }
+  .muted, .stoa-statbar, .stoa-kbd { font-size: var(--stoa-font-size-xs); }
 }

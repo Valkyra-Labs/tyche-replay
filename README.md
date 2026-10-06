@@ -21,18 +21,24 @@ design system. Everything runs in the browser; there is no server.
 Status: early. Performance record (load, frame rate and worker cost
 under a named load, with stamps): [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
 While a capture loads the page says so; a failure says why, with a
-retry; before the first message the views say they are empty.
+retry; before the first message the views say they are empty. A capture
+over 256 MiB, as downloaded or once inflated, or past the engine's
+limits on messages and book depth, is refused with that reason rather
+than filling the tab's memory.
 
 The playback controls and the performance counters sit under the
 header, so they stay put while the views below fill up. The header has
-a light and dark theme switch (it follows the system until one is
-picked) and an English and Arabic language switch; Arabic is right to
+a Shortcuts button (or press `?`) that lists the keyboard shortcuts
+(the space bar plays and pauses), a light and dark theme switch (it
+follows the system until one is picked) and an English and Arabic
+language switch; Arabic is right to
 left, with Arabic-Indic digits in the book, the heatmap, the trades and
 the clock.
 
 The liquidity heatmap shows the last ten minutes in 240 columns of
 2.5 s, each the displayed book at the end of its slice, the newest at
-the clock; its 80 rows are prices a cent apart around the current
+the clock (at the right, and at the left in Arabic, where time runs
+right to left as on the time slider); its 80 rows are prices a cent apart around the current
 midpoint, the same prices for every column. Bids are drawn in the bid
 colour and asks in the ask colour. When the spread is wider than the
 80 cents (as at 10:00:00 on the AAPL day), the newest column is empty
@@ -54,8 +60,9 @@ pnpm test && pnpm e2e
 The app loads AAPL from `public/data/20260924_AAPL_deepplus.tycz` by
 default (produce it with `tyche extract --symbols AAPL -o
 20260924_AAPL_deepplus.tyc`, see tyche-market, and gzip it to `.tycz`);
-`?symbol=SPY&data=URL&at=NS` overrides the symbol, the capture and the
-start time; `?theme=light|dark` and `?lang=en|ar` set the theme and the
+`?symbol=SPY&data=PATH&at=NS` overrides the symbol, the capture and the
+start time (the capture only from this site's own `data/` folder: a
+path elsewhere, or another site's address, loads the default instead); `?theme=light|dark` and `?lang=en|ar` set the theme and the
 language (the switches keep them there, and the theme in localStorage
 too). The unit tests check the heatmap against the engine on the same
 AAPL capture, so `pnpm test` needs it too.
@@ -68,7 +75,9 @@ pnpm test && pnpm e2e
 
 `pnpm e2e` drives the dev server on 5174 and reuses one already running
 there; `E2E_PORT` moves it to another port, and `E2E_PREVIEW=1` tests
-the production build (after `pnpm build`) through `vite preview`.
+the production build (after `pnpm build`) through `vite preview`: every
+test but one, which reads what the app last drew from a hook that only
+a development build sets, and is skipped there.
 Without a capture, `pnpm test:no-capture` runs the unit tests but the
 heatmap's, and `pnpm e2e:no-capture` the e2e tests tagged `@no-capture`;
 that is what CI runs.
@@ -86,9 +95,13 @@ own output and stops, publishing nothing, when a value cannot be read.
 - Unit tests (no capture): Vitest tests passed in `pnpm test:no-capture`,
   every unit test but the heatmap's, which replays the AAPL capture.
 - e2e (no capture): Playwright tests passed in Chromium against `vite
-  preview` of the build, only those tagged `@no-capture` (a failed load
-  explained in Arabic, with an axe check; the IEX terms in the footer).
-  The rest replay the AAPL day and run locally with the capture.
+  preview` of the build, only those tagged `@no-capture`: a failed load
+  explained in Arabic, with an axe check; captures refused for their
+  size, a gzip bomb and a book deeper than the engine accepts; `?data=`
+  kept to the site's data folder; IEX's attribution and its links in
+  English and Arabic; language, direction and theme set before the
+  body; the Arabic faces preloaded; the colour scheme of a chosen
+  theme. The rest replay the AAPL day and run locally with the capture.
 - Bundle gzip: every JavaScript and CSS file in `dist/`, gzip level 9,
   summed. The engine's WebAssembly and the fonts are not included.
 
@@ -97,9 +110,12 @@ loading error, not the replay a visitor sees.
 
 ## Data
 
-Data provided for free by IEX. By accessing or using IEX Historical Data,
-you agree to the IEX Historical Data Terms of Use
-(https://www.iex.io/legal/hist-data-terms).
+Data provided for free by [IEX](https://iextrading.com/trading/market-data/).
+By accessing or using IEX Historical Data, you agree to the
+[IEX Historical Data Terms of Use](https://www.iex.io/legal/hist-data-terms).
+
+The page shows this text in English in every language, with "IEX" and
+the terms linked as IEX asks; in Arabic its translation stands beside it.
 
 ## License
 

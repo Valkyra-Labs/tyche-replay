@@ -3,6 +3,7 @@
 // wins, because the UI only sends a new one after the previous answer.
 import init, { TycheReplay } from "tyche-market";
 import { heatmapFrame } from "./heatmap";
+import { download, engineFailure, inflate, MAX_CAPTURE_BYTES, TooLarge } from "./load";
 import type { FromWorker, HeatmapResult, ToWorker } from "./protocol";
 
 let replay: TycheReplay | null = null;
@@ -15,19 +16,22 @@ class HttpStatus extends Error {
 }
 const post = (m: FromWorker, transfer: Transferable[] = []) => self.postMessage(m, { transfer });
 
-async function load(url: string): Promise<Uint8Array> {
+async function load(url: string): Promise<Uint8Array<ArrayBuffer>> {
   post({ kind: "progress", stage: "downloading" });
   const res = await fetch(url);
   if (!res.ok) throw new HttpStatus(res.status);
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  // A message per percent at most (or per 256 KB without a total), not
+  // per chunk.
+  let shown = -Infinity;
+  const bytes = await download(res, MAX_CAPTURE_BYTES, (loaded, total) => {
+    const step = total ? total / 100 : 256 * 1024;
+    if (loaded - shown < step && loaded !== total) return;
+    shown = loaded;
+    post({ kind: "progress", stage: "downloading", loaded, total });
+  });
   post({ kind: "progress", stage: "decoding" });
-  // Captures ship gzipped (.tycz). Decide by the gzip magic, not by the
-  // name or headers: some servers inflate on the way, some do not.
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-    const inflated = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    return new Uint8Array(await new Response(inflated).arrayBuffer());
-  }
-  return bytes;
+  // Captures ship gzipped (.tycz).
+  return inflate(bytes, MAX_CAPTURE_BYTES);
 }
 
 self.onmessage = async (e: MessageEvent<ToWorker>) => {
@@ -74,7 +78,9 @@ self.onmessage = async (e: MessageEvent<ToWorker>) => {
       reason:
         err instanceof HttpStatus
           ? { kind: "http", status: err.status }
-          : { kind: "engine", detail: err instanceof Error ? err.message : String(err) },
+          : err instanceof TooLarge
+            ? { kind: "limit", code: "capture_too_large", detail: err.message }
+            : engineFailure(err instanceof Error ? err.message : String(err)),
     });
   }
 };

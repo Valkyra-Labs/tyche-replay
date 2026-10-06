@@ -11,14 +11,20 @@ export const LOCALES: Record<Lang, string> = { en: "en-US", ar: "ar-u-nu-arab" }
 const en = {
   title: "Tyche Replay",
   onIex: (symbol: string) => `${symbol} on IEX`,
-  attribution: "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the ",
-  terms: "IEX Historical Data Terms of Use",
-  attributionEnd: ".",
+  /** IEX's attribution in this language. The page always shows IEX's
+   * own English text (see ATTRIBUTION in App.tsx); a translation that
+   * differs from it is shown beside it. */
+  attribution: "Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use.",
   theme: "Theme",
   system: "System",
   light: "Light",
   dark: "Dark",
   language: "Language",
+  shortcuts: "Shortcuts",
+  shortcutsTitle: "Keyboard shortcuts",
+  playOrPause: "Play or pause",
+  showShortcuts: "Show keyboard shortcuts",
+  otherShortcuts: "Other",
   capture: (symbol: string) => `${symbol} capture`,
   downloading: (symbol: string) => `Downloading the ${symbol} capture…`,
   decoding: (symbol: string) => `Decoding the ${symbol} capture…`,
@@ -27,6 +33,10 @@ const en = {
   httpFailed: (status: string) => `The server answered with status ${status}.`,
   engineStopped: "The replay engine stopped.",
   unreadable: "The replay engine sent a message that could not be read.",
+  tooLarge: (symbol: string) => `The ${symbol} capture is larger than this page can replay.`,
+  tooManyMessages: (symbol: string) => `The capture holds more ${symbol} messages than this page can replay.`,
+  bookTooDeep: (symbol: string) => `The ${symbol} book in this capture is deeper than this page can replay.`,
+  megabytes: (value: string) => `${value} MB`,
   details: "Details:",
   retry: "Retry",
   playback: "Playback",
@@ -50,10 +60,13 @@ const en = {
   bookLabel: (symbol: string, depth: string) => `Order book for ${symbol}, ${depth} levels per side`,
   liquidity: "Liquidity, last 10 minutes",
   liquidityLabel: "Displayed liquidity over the last 10 minutes",
+  // The heatmap runs in the reading direction, as the time slider does:
+  // the newest column is at the right in English, at the left in Arabic.
   liquidityText: (top: string, bottom: string, column: string) =>
-    `Prices from ${top} at the top to ${bottom} at the bottom, a cent a row, around the midpoint now. Time runs left to right, ${column} seconds a column, ending now. In each column bids lie below asks; darker cells hold more shares.`,
+    `Prices from ${top} at the top to ${bottom} at the bottom, a cent a row, around the midpoint now. Time runs left to right, ${column} seconds a column, ending now at the right. In each column bids lie below asks; darker cells hold more shares.`,
   trades: "Trades",
   tradesCaption: (symbol: string) => `Recent trades in ${symbol}`,
+  noTrades: "No trades in the last minute.",
 };
 
 export type Strings = typeof en;
@@ -61,14 +74,17 @@ export type Strings = typeof en;
 const ar: Strings = {
   title: "تايكي ريبلاي",
   onIex: (symbol) => `${symbol} في بورصة IEX`,
-  attribution: "البيانات مقدَّمة مجانًا من IEX. باستخدامك بيانات IEX التاريخية أو الوصول إليها، فإنك توافق على ",
-  terms: "شروط استخدام بيانات IEX التاريخية",
-  attributionEnd: ".",
+  attribution: "البيانات مقدَّمة مجانًا من IEX. باستخدامك بيانات IEX التاريخية أو الوصول إليها، فإنك توافق على شروط استخدام بيانات IEX التاريخية.",
   theme: "المظهر",
   system: "النظام",
   light: "فاتح",
   dark: "داكن",
   language: "اللغة",
+  shortcuts: "الاختصارات",
+  shortcutsTitle: "اختصارات لوحة المفاتيح",
+  playOrPause: "تشغيل أو إيقاف مؤقت",
+  showShortcuts: "عرض اختصارات لوحة المفاتيح",
+  otherShortcuts: "أخرى",
   capture: (symbol) => `تسجيل ${symbol}`,
   downloading: (symbol) => `جارٍ تنزيل تسجيل ${symbol}…`,
   decoding: (symbol) => `جارٍ فك ترميز تسجيل ${symbol}…`,
@@ -77,6 +93,10 @@ const ar: Strings = {
   httpFailed: (status) => `ردّ الخادم برمز الحالة ${status}.`,
   engineStopped: "توقّف محرك إعادة العرض.",
   unreadable: "أرسل محرك إعادة العرض رسالة تعذّرت قراءتها.",
+  tooLarge: (symbol) => `تسجيل ${symbol} أكبر مما تستطيع هذه الصفحة إعادة عرضه.`,
+  tooManyMessages: (symbol) => `يحوي التسجيل رسائل ${symbol} أكثر مما تستطيع هذه الصفحة إعادة عرضه.`,
+  bookTooDeep: (symbol) => `دفتر أوامر ${symbol} في هذا التسجيل أعمق مما تستطيع هذه الصفحة إعادة عرضه.`,
+  megabytes: (value) => `${value} ميغابايت`,
   details: "التفاصيل:",
   retry: "أعد المحاولة",
   playback: "التشغيل",
@@ -101,9 +121,10 @@ const ar: Strings = {
   liquidity: "السيولة، آخر ١٠ دقائق",
   liquidityLabel: "السيولة المعروضة خلال آخر ١٠ دقائق",
   liquidityText: (top, bottom, column) =>
-    `الأسعار من ${top} في الأعلى إلى ${bottom} في الأسفل، سنت واحد لكل صف، حول السعر الأوسط الآن. يجري الوقت من اليسار إلى اليمين، ${column} ثانية لكل عمود، وينتهي الآن. في كل عمود تقع أوامر الشراء تحت أوامر البيع؛ والخلايا الأغمق تحمل أسهمًا أكثر.`,
+    `الأسعار من ${top} في الأعلى إلى ${bottom} في الأسفل، سنت واحد لكل صف، حول السعر الأوسط الآن. يجري الوقت من اليمين إلى اليسار، ${column} ثانية لكل عمود، وينتهي الآن عند اليسار. في كل عمود تقع أوامر الشراء تحت أوامر البيع؛ والخلايا الأغمق تحمل أسهمًا أكثر.`,
   trades: "الصفقات",
   tradesCaption: (symbol) => `أحدث الصفقات في ${symbol}`,
+  noTrades: "لا صفقات في آخر دقيقة.",
 };
 
 export const strings: Record<Lang, Strings> = { en, ar };
